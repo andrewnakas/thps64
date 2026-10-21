@@ -1,4 +1,4 @@
-* text=auto
-*.sh text eol=lf
-*.patch text eol=lf
-toolchain/cc32 text eol=lf
+* text=auto eol=lf
+*.z64 binary
+*.bin binary
+*.png binary
