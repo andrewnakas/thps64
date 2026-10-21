@@ -3,11 +3,13 @@
 
   python tools/gate.py            -> one line per file, then a summary line; exit 0 only if all match
 A file must define exactly the function its name says (so claims and progress stay per address).
-Re-checking every file on every PR is the zero-loss rule: nothing already matched may break.
+Re-checking every file on every PR is the zero-loss rule: nothing already matched may break or disappear
+(files tracked on the base branch must still exist).
 """
 import glob
 import os
 import re
+import subprocess
 import sys
 import tempfile
 
@@ -41,6 +43,12 @@ def main():
             good += 1
         for n, ok in res:
             print(f'{"MATCH" if ok else "DIFF "} {n}' + ('' if n == want else '  (extra function in file)'))
+    # zero-loss across PRs: a function matched on the base branch (tracked in git) may not disappear
+    tracked = subprocess.run(['git', '-c', 'safe.directory=*', 'ls-files', 'src/funcs'], cwd=ROOT,
+                             capture_output=True, text=True).stdout.split()
+    for t in tracked:
+        if t.endswith('.c') and not os.path.exists(os.path.join(ROOT, t)):
+            bad.append(f'{os.path.basename(t)[:-2]}: matched on the base branch, removed by this change (LOST)')
     for b in bad:
         print('PROBLEM ' + b)
     print(f'{good}/{len(files)} files match' + ('' if not bad else f', {len(bad)} problem(s)'))
