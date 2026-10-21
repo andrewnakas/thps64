@@ -37,6 +37,20 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   whitespace, but 64 ultralib files are still too big -> those functions are not named yet. Also no quoted -D values,
   and no drive-letter paths (run cc.exe in the source dir).
 
+## Recomp (2026-10-21)
+- `tools/recomp_syms.py` -> `work/recomp.z64` (ROM + main.bin raw at 0xC00000) + `recomp/thps.syms.toml`;
+  `tools/recomp_loop.py` runs N64Recomp (PW64 tree's build-win/N64Recomp.exe) with `recomp/thps.toml`.
+  **N64Recomp now translates everything: 262 boot + 2503 main functions -> recomp/RecompiledFuncs (58 files).**
+- Function discovery: `tools/find_funcs.py` seeds splat (jal targets, data pointers to prologues, prologues after
+  returns) -> splat finds 1880 functions. recomp_syms then splits leaf runs, drops constant pools (KMC GCC puts
+  small pools between functions; data that decodes as code is rejected: wild jumps, non-R4300 ops), trims tails.
+- 21 boot functions stubbed (ERZ unpacker, cop0/cache/exception libultra internals the runtime replaces).
+- **COP2 / GTE:** THPS N64 is a PSX port; the GTE is emulated in C (e.g. func_80042D1C, regs around 0x800D48A4), but
+  6 leftover COP2 instructions sit in functions (mfc2 $25-27 at 0x8005D264...). In the recomp input they become
+  `break 0x3F2` (recomp/cop2_sites.txt), so the runtime stops there if the game ever reaches one.
+- Open: 6 main functions branch outside themselves (over-split; merge them), then compile RecompiledFuncs with a
+  runtime (N64ModernRuntime + RT64, as the PW64 port does) and boot with a custom entry that skips the ERZ loader.
+
 ## Blocked on the owner
 - GitHub repo for this project (private) + Steward App install: after the passkey step.
 

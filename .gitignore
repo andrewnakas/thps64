@@ -7,3 +7,6 @@ baserom*
 __pycache__/
 asm/
 build/
+asm_boot/
+src_boot/
+recomp/RecompiledFuncs/
