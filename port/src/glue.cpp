@@ -1,5 +1,9 @@
 // Small pieces the Pilotwings-derived glue expects, specialised for THPS.
 #include <cstdint>
+#include <utility>
+#include <vector>
+#include <string>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -9,20 +13,57 @@
 #include "thps/callbacks.h"
 #include "thps/glue.h"
 
-// The audio microcode is not recompiled yet: tasks are reported complete (callbacks.cpp never matches this
-// because kAspMainTextStart is unset), so the game runs silent.
-RspExitReason aspMain_run(uint8_t* rdram, uint32_t ucode_addr) {
-    (void)rdram; (void)ucode_addr;
-    return RspExitReason::Broke;
-}
-
 namespace thps {
 
 namespace { uint8_t* g_rdram = nullptr; }
 
-void input_script_state(uint16_t* buttons, float* x, float* y) { *buttons = 0; *x = 0.0f; *y = 0.0f; }
-void input_script_state(int, uint16_t* buttons, float* x, float* y) { *buttons = 0; *x = 0.0f; *y = 0.0f; }
+// Scripted input for test runs: THPS_PRESS="A@6,START@12.5,DDOWN@14" holds each button for 0.25 s at that many
+// seconds after the first poll. Player 1 only; the stick stays centred.
+namespace {
+struct Press { uint16_t mask; double at; };
+std::vector<Press> load_presses() {
+    std::vector<Press> out;
+    const char* e = std::getenv("THPS_PRESS");
+    if (e == nullptr) return out;
+    static const std::pair<const char*, uint16_t> names[] = {
+        {"A", 0x8000}, {"B", 0x4000}, {"Z", 0x2000}, {"START", 0x1000}, {"DUP", 0x0800}, {"DDOWN", 0x0400},
+        {"DLEFT", 0x0200}, {"DRIGHT", 0x0100}, {"L", 0x0020}, {"R", 0x0010}, {"CUP", 0x0008}, {"CDOWN", 0x0004},
+        {"CLEFT", 0x0002}, {"CRIGHT", 0x0001}};
+    std::string spec = e;
+    size_t pos = 0;
+    while (pos < spec.size()) {
+        size_t comma = spec.find(',', pos);
+        std::string item = spec.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+        size_t at = item.find('@');
+        if (at != std::string::npos) {
+            const std::string name = item.substr(0, at);
+            for (const auto& [n, m] : names) {
+                if (name == n) out.push_back({ m, std::atof(item.c_str() + at + 1) });
+            }
+        }
+        if (comma == std::string::npos) break;
+        pos = comma + 1;
+    }
+    return out;
+}
+uint16_t scripted_buttons() {
+    static const std::vector<Press> presses = load_presses();
+    static const auto start = std::chrono::steady_clock::now();
+    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    uint16_t b = 0;
+    for (const Press& p : presses) {
+        if (t >= p.at && t < p.at + 0.25) b |= p.mask;
+    }
+    return b;
+}
+}  // namespace
+
+void input_script_state(uint16_t* buttons, float* x, float* y) { *buttons = scripted_buttons(); *x = 0.0f; *y = 0.0f; }
+void input_script_state(int player, uint16_t* buttons, float* x, float* y) {
+    *buttons = player == 0 ? scripted_buttons() : 0; *x = 0.0f; *y = 0.0f;
+}
 void set_rdram_base(uint8_t* rdram) { g_rdram = rdram; }
+uint8_t* rdram_base() { return g_rdram; }
 void poll_game_state() {}
 
 // No base-recomp patches yet (boot main is replaced by an `ignored` function in src/boot.cpp instead).

@@ -723,7 +723,7 @@ void set_frequency(uint32_t frequency) {
 // the real thing.
 
 // Where aspMain's text sits in RDRAM, from the ELF symbol aspMainTextStart.
-constexpr uint32_t kAspMainTextStart = 0xFFFFFFFFu;   // THPS: audio microcode not recompiled yet (src/glue.cpp)
+constexpr uint32_t kAspMainTextStart = 0x80097C40u;   // THPS audio ucode (recomp/aspMain.thps.toml)
 
 // Retained for tasks that are not aspMain: reporting the task complete keeps
 // the game running, where returning nullptr would make librecomp print and
@@ -978,13 +978,50 @@ RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
         g_audio_task_data = static_cast<uint32_t>(task->t.data_ptr);
         g_audio_task_size = task->t.data_size;
         g_audio_task = *task;
+        // THPS_AUDIO_OPS=1: every 300th audio task, a histogram of its command opcodes (are voices playing?)
+        static const bool ops = std::getenv("THPS_AUDIO_OPS") != nullptr;
+        static uint64_t n_tasks = 0;
+        if (ops && (++n_tasks % 300) == 0 && thps::rdram_base() != nullptr) {
+            int hist[64] = {};
+            for (uint32_t off = 0; off + 8 <= g_audio_task_size; off += 8) {
+                const uint32_t w0 = *reinterpret_cast<const uint32_t*>(thps::rdram_base() + ((g_audio_task_data + off) & 0x00FFFFFFu));
+                hist[(w0 >> 24) & 0x3F]++;
+            }
+            std::fprintf(stderr, "[thps] audio task %llu ops:", static_cast<unsigned long long>(n_tasks));
+            for (int i = 0; i < 64; i++) {
+                if (hist[i]) std::fprintf(stderr, " %02X:%d", i, hist[i]);
+            }
+            std::fprintf(stderr, "\n");
+            if (n_tasks == 600) {   // one full list, with how much of each LOADBUFF source is non-zero
+                uint8_t* rd = thps::rdram_base();
+                for (uint32_t off = 0; off + 8 <= g_audio_task_size; off += 8) {
+                    const uint32_t w0 = *reinterpret_cast<const uint32_t*>(rd + ((g_audio_task_data + off) & 0x00FFFFFFu));
+                    const uint32_t w1 = *reinterpret_cast<const uint32_t*>(rd + ((g_audio_task_data + off + 4) & 0x00FFFFFFu));
+                    int nonzero = -1;
+                    if (((w0 >> 24) & 0x3F) == 0x04 || ((w0 >> 24) & 0x3F) == 0x06) {
+                        nonzero = 0;
+                        for (uint32_t k = 0; k < 0x170; k += 4) {
+                            nonzero += *reinterpret_cast<const uint32_t*>(rd + ((w1 + k) & 0x00FFFFFCu)) != 0;
+                        }
+                    }
+                    std::fprintf(stderr, "[thps]   cmd %08X %08X%s", w0, w1, nonzero >= 0 ? "" : "\n");
+                    if (nonzero >= 0) std::fprintf(stderr, "  (%d/92 nonzero words at source)\n", nonzero);
+                }
+            }
+        }
         return asp_main_watched;
     }
     static uint64_t others = 0;
     if (++others <= 5) {
-        std::fprintf(stderr, "[thps] non-audio RSP task: type %u ucode 0x%08X\n",
-                     static_cast<unsigned>(task->t.type),
-                     static_cast<uint32_t>(task->t.ucode));
+        std::fprintf(stderr, "[thps] RSP task: type %u flags %u boot 0x%08X+0x%X ucode 0x%08X+0x%X data 0x%08X+0x%X "
+                             "dram_stack 0x%08X out 0x%08X data_ptr 0x%08X+0x%X yield 0x%08X\n",
+                     static_cast<unsigned>(task->t.type), static_cast<unsigned>(task->t.flags),
+                     static_cast<uint32_t>(task->t.ucode_boot), static_cast<uint32_t>(task->t.ucode_boot_size),
+                     static_cast<uint32_t>(task->t.ucode), static_cast<uint32_t>(task->t.ucode_size),
+                     static_cast<uint32_t>(task->t.ucode_data), static_cast<uint32_t>(task->t.ucode_data_size),
+                     static_cast<uint32_t>(task->t.dram_stack), static_cast<uint32_t>(task->t.output_buff),
+                     static_cast<uint32_t>(task->t.data_ptr), static_cast<uint32_t>(task->t.data_size),
+                     static_cast<uint32_t>(task->t.yield_data_ptr));
         std::fflush(stderr);
     }
     return rsp_unknown_ucode;
@@ -1098,8 +1135,13 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     if (const char* hid = std::getenv("THPS_HIDDEN"); hid != nullptr && *hid == '1') {
         flags |= SDL_WINDOW_HIDDEN;
     }
-    g_window = SDL_CreateWindow("THPS64 Recompiled",
-                                SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    // THPS_OFFSCREEN=1 places the window off the desktop (still shown, so Windows Graphics Capture can grab it).
+    int win_x = SDL_WINDOWPOS_CENTERED, win_y = SDL_WINDOWPOS_CENTERED;
+    if (const char* off = std::getenv("THPS_OFFSCREEN"); off != nullptr && *off == '1') {
+        win_x = -4000;
+        win_y = 0;
+    }
+    g_window = SDL_CreateWindow("THPS64 Recompiled", win_x, win_y,
                                 width, height, flags);
     if (g_window == nullptr) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());

@@ -3,7 +3,7 @@ param([int]$Seconds = 40)
 $exe = 'E:\thps64\port\build\THPS64Recomp.exe'
 $rom = "E:\Tony Hawk's Pro Skater (U) (V1.1) [!].z64"
 $out = 'E:\thps64\port\run.log'; $err = 'E:\thps64\port\run.err'
-$env:THPS_HIDDEN = "1"; $env:THPS_WATCH = "1"; if (-not $env:THPS_TRACE_FN) { $env:THPS_TRACE_FN = "" }
+if ($env:THPS_CAPTURE) { $env:THPS_HIDDEN = ""; $env:THPS_OFFSCREEN = "1" } else { $env:THPS_HIDDEN = "1"; $env:THPS_OFFSCREEN = "" }; $env:THPS_WATCH = "1"; if (-not $env:THPS_TRACE_FN) { $env:THPS_TRACE_FN = "" }
 $p = Start-Process $exe -ArgumentList ('"' + $rom + '"') -WorkingDirectory 'E:\thps64\port\build' `
      -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
 $t = 0

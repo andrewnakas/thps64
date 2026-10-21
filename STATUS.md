@@ -71,7 +71,13 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
     config/boot_symbols.txt, so the runtime replaces them; a few internals stubbed in port/src/glue.cpp.
 - Debug kit: N64Recomp trace_mode -> per-thread last function + call ring + waited-on queue (watchdog), queue dumps,
   native stack walk of stalled threads, per-function argument logging.
-- Next for the port: audio (RSP audio microcode at 0x80097C40 is reported complete, so silent); visual check.
+- **Renders correctly** (Windows Graphics Capture, port/capture_wgc.py, no desktop grabs; run.ps1 with THPS_CAPTURE=1
+  puts the window off-screen): Controller Pak notice -> copyright -> Activision/Neversoft/EoR logos -> 3D attract demo
+  (Tony Hawk in the Warehouse). Scripted input: THPS_PRESS="A@4,START@12".
+- Audio: the game's aspMain (older build) is recompiled by RSPRecomp (recomp/aspMain.thps.toml; command table at data
+  offset 0, entry 0x02B0 = IMEM 0x12B0); every task completes. But output is silent: the lists hold only the effects
+  chain (LOADBUFF/SAVEBUFF ring buffers, MIXER, POLEF, INTERLEAVE), never ADPCM/RESAMPLE/ENVMIXER, i.e. no voice is
+  ever started. Also the game makes audio ~1.7x faster than real time. THPS_AUDIO_OPS=1 / THPS_AUDIO_DUMP=1 to inspect.
 
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat
