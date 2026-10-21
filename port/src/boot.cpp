@@ -122,7 +122,7 @@ void call(void (*fn)(uint8_t*, recomp_context*), uint8_t* rdram, recomp_context*
 
 }  // namespace
 
-extern "C" RECOMP_FUNC void func_80000870(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void func_80000870(uint8_t* rdram, recomp_context* ctx) {   // not RECOMP_FUNC: that is "extern inline" (weak) and would be dropped
     // The libultra setup boot main does first (see the disassembly at 0x80000870).
     call(osInitialize_recomp, rdram, ctx);
     call(func_80003010, rdram, ctx, 1);

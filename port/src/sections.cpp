@@ -61,8 +61,7 @@ void place_resident_sections(uint32_t entrypoint) {
             // THPS: main sits at ROM 0xC00000 only in the recompiler's input (work/recomp.z64); in the real ROM it
             // is ERZ-packed, and src/boot.cpp unpacks it to its RAM address. Register its functions there.
             load_overlays(section.rom_addr, static_cast<int32_t>(section.ram_addr), section.size);
-            std::fprintf(stderr, "[thps] main section registered at 0x%08X (+0x%X)
-", section.ram_addr, section.size);
+            std::fprintf(stderr, "[thps] main section registered at 0x%08X (+0x%X)\n", section.ram_addr, section.size);
             continue;
         }
         if (section.rom_addr < kBootRom || section.rom_addr + section.size > kBootRom + kBootSize) {

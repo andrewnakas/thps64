@@ -50,7 +50,12 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   `break 0x3F2` (recomp/cop2_sites.txt), so the runtime stops there if the game ever reaches one.
 - Over-splits merged (`merge_outside`). `tools/gen_reimplemented_decls.py` declares the runtime's <name>_recomp
   libultra (440 names); **`tools/recomp_compile.sh`: all 55 generated C files compile with clang, 0 errors.**
-- Open: link RecompiledFuncs with a
+- **Port (`port/`, from the MIT Pilotwings 64 recomp; reuses its lib/ checkout):** `port/build.cmd` (clang-cl +
+  Ninja, run detached) builds `port/build/THPS64Recomp.exe`; `--identify` accepts the V1.1 dump. src/boot.cpp
+  replaces boot main (ignored in thps.toml): libultra setup, C++ ERZ1 unpack of main into RDRAM, then 0x800C0480.
+  Audio tasks reported complete (silent). 8 libultra internals stubbed in src/glue.cpp. **Not launched yet**
+  (owner rule: launch only on request).
+- Open: first run (when the owner says), then name the remaining boot libultra so the runtime replaces it, and a
   runtime (N64ModernRuntime + RT64, as the PW64 port does) and boot with a custom entry that skips the ERZ loader.
 
 ## Blocked on the owner

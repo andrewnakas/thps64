@@ -2,6 +2,9 @@
 #ifndef REIMPLEMENTED_DECLS_H
 #define REIMPLEMENTED_DECLS_H
 #include "recomp.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 void CleanupFromRCPop_recomp(uint8_t* rdram, recomp_context* ctx);
 void ClearTempBreakpoint_recomp(uint8_t* rdram, recomp_context* ctx);
 void IsJump_recomp(uint8_t* rdram, recomp_context* ctx);
@@ -444,4 +447,7 @@ void viMgrMain_recomp(uint8_t* rdram, recomp_context* ctx);
 void vsprintf_recomp(uint8_t* rdram, recomp_context* ctx);
 /* functions recomp/thps.toml marks ignored: the port defines them */
 void func_80000870(uint8_t* rdram, recomp_context* ctx);
+#ifdef __cplusplus
+}
+#endif
 #endif
