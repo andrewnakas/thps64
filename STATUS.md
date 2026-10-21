@@ -87,7 +87,16 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   Missing runtime internals get generated no-op stubs (port/src/auto_stubs.cpp).
 - Research digest (2026-10-21): Rush 2 Recompiled (n64sym naming, inflate+load_overlays, virtual Controller Pak in
   src/pak.cpp against a 32 KB .mpk), VPW64Recomp (widescreen/interpolation, virtual pak + rumble), wpj2-recomp.
-  ModernRuntime osPfs* are NOPACK stubs -> THPS shows "No Controller Pak": next to emulate, Rush 2 style.
+  ModernRuntime osPfs* are NOPACK stubs.
+- **Virtual Controller Pak works** (port/src/pak.cpp, own code from the libultra pfs layout): the game's osPfs* filesystem
+  is recompiled under thps_ names (recomp_syms RECOMPILE_AS); the port supplies __osContRamRead/Write, __osPfsGetStatus,
+  osPfsIsPlug against <settings>/thps64.mpk (THPS_MPK=path), created formatted. "No Controller Pak" notice gone.
+- **8 MB is the default again** ("Expansion Pak found"; the old 7.5 MB failure was the truncated-function bug).
+  THPS_4MB=1 for a stock console.
+- Reaches: notices -> logos -> intro cutscenes -> title -> main menu screen. **Open bug: main menu items are invisible
+  and the menu ignores input** (START/A every few seconds; it idles back to DEMO MODE), same at 4 MB, no runtime
+  errors. Input itself is delivered (THPS_TRACE_INPUT=1: ~30 polls/s, title accepts START). Suspect a fade-in/setup
+  step waiting on something the runtime does not deliver; next: trace the menu code.
 
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat

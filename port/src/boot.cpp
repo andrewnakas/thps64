@@ -140,9 +140,9 @@ extern "C" void func_80000870(uint8_t* rdram, recomp_context* ctx) {   // not RE
     // 0xB0061E26 in V1.1) to 0x80011C2C, which the game's file code reads, and the chunk table to 0x803C0000.
     auto put_word = [&](uint32_t vaddr, uint32_t w) { for (int b = 0; b < 4; b++) put_byte(rdram, vaddr + b, uint8_t(w >> (24 - 8 * b))); };
     put_word(0x80011C2C, be32(rom.data() + 0x13B10));
-    // osMemSize: the runtime reports 8 MB (Expansion Pak); THPS sizes a 7.5 MB allocation from it that its heap
-    // cannot satisfy. Report a stock 4 MB console unless THPS_8MB=1.
-    if (const char* e = std::getenv("THPS_8MB"); e == nullptr || *e != '1') put_word(0x80000318, 0x00400000);
+    // osMemSize: the runtime reports 8 MB, so THPS finds an Expansion Pak (its high-res/extra-memory path).
+    // THPS_4MB=1 reports a stock 4 MB console instead ("Expansion Pak not found").
+    if (const char* e = std::getenv("THPS_4MB"); e != nullptr && *e == '1') put_word(0x80000318, 0x00400000);
     for (uint32_t k = 0; k < n + 2; k++) put_word(0x803C0000 + 4 * k, be32(rom.data() + kChunkTable + 4 * k));
     uint32_t dst = kMainVram;
     std::vector<uint8_t> chunk;

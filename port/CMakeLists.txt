@@ -283,7 +283,7 @@ set(THPS_SOURCES src/main.cpp src/rom.cpp src/crash_handler.cpp)
 # sections.cpp cannot even compile without recomp_overlays.inl.
 if(THPS_WITH_RUNTIME AND THPS_WITH_RECOMPILED)
     list(APPEND THPS_SOURCES src/renderer.cpp src/callbacks.cpp src/sections.cpp src/libultra_stubs.cpp
-                             src/audiodiag.cpp src/resample.cpp src/glue.cpp src/boot.cpp src/auto_stubs.cpp src/audio_naudio_hle.cpp
+                             src/audiodiag.cpp src/resample.cpp src/glue.cpp src/boot.cpp src/auto_stubs.cpp src/audio_naudio_hle.cpp src/pak.cpp
                              third_party/rsp-hle/alist.c third_party/rsp-hle/alist_audio.c
                              third_party/rsp-hle/alist_naudio.c third_party/rsp-hle/alist_nead.c
                              third_party/rsp-hle/audio.c third_party/rsp-hle/memory.c third_party/rsp-hle/mp3.c)

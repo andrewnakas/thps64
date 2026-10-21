@@ -328,6 +328,17 @@ bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
     float scripted_y = 0.0f;
     thps::input_script_state(&scripted_buttons, &scripted_x, &scripted_y);
     pressed |= scripted_buttons;
+    {   // THPS_TRACE_INPUT=1: how often the game polls, and when a scripted press reaches it
+        static const bool trace = std::getenv("THPS_TRACE_INPUT") != nullptr;
+        static uint64_t polls = 0;
+        static uint16_t last = 0;
+        ++polls;
+        if (trace && (scripted_buttons != last || polls % 600 == 0)) {
+            std::fprintf(stderr, "[thps] input poll %llu: scripted 0x%04X pressed 0x%04X\n",
+                         static_cast<unsigned long long>(polls), scripted_buttons, pressed);
+        }
+        last = scripted_buttons;
+    }
     if (scripted_x != 0.0f) { stick_x = scripted_x; }
     if (scripted_y != 0.0f) { stick_y = scripted_y; }
 

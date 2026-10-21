@@ -208,7 +208,18 @@ def main():
     lo_u, hi_u = 0x80000B08, 0x800018BC
     boot = [f for f in boot if not lo_u <= f[0] < hi_u] + UNPACKER
     PORT_OWNED = {0x80002E00: 'thps_osSetEventMesg', 0x80004770: 'thps_osPiRawStartDma', 0x80004ED0: 'thps_osRecvMesg', 0x80005070: 'thps_osSendMesg', 0x80010A40: 'thps_osAiGetStatus'}
-    boot = [(a, sz, PORT_OWNED.get(a, n)) for a, sz, n in boot]
+    # The game's own Controller Pak filesystem code, recompiled under thps_ names (the runtime's osPfs* are "no pak"
+    # stubs); port/src/pak.cpp supplies only the lowest layer (PORT_OWNED below) against a 32 KB .mpk file.
+    RECOMPILE_AS = {0x80008100: 'thps_osPfsAllocateFile', 0x80008E74: 'thps___osRepairPackId',
+                    0x8000928C: 'thps___osCheckPackId', 0x80009424: 'thps___osGetId', 0x80009680: 'thps___osCheckId',
+                    0x8000977C: 'thps___osPfsRWInode', 0x80009A9C: 'thps___osPfsSelectBank',
+                    0x80009EA0: 'thps_osPfsDeleteFile', 0x8000A5AC: 'thps_osPfsReadWriteFile',
+                    0x8000A9B0: 'thps_osPfsFileState', 0x8000ACA0: 'thps_osPfsFindFile', 0x8000B1D0: 'thps_osPfsFreeBlocks',
+                    0x8000B320: 'thps_osPfsNumFiles', 0x8000B470: 'thps_osPfsInitPak', 0x8000B6E0: 'thps_osPfsChecker',
+                    0x8000BDA4: 'thps_corrupted_init', 0x8000BF58: 'thps_corrupted'}
+    PORT_OWNED.update({0x800088B0: 'thps___osContRamWrite', 0x80009B10: 'thps___osContRamRead',
+                       0x8000C3A0: 'thps___osPfsGetStatus', 0x8000AE60: 'thps_osPfsIsPlug'})
+    boot = [(a, sz, PORT_OWNED.get(a, RECOMPILE_AS.get(a, n))) for a, sz, n in boot]
     # every jal target is a function, even where splat saw data (libultra helpers like fcos)
     named = {}
     for line in open(os.path.join(ROOT, 'config', 'boot_symbols.txt')):
@@ -216,6 +227,7 @@ def main():
         if m:
             named[int(m.group(2), 16)] = m.group(1)
     named.update(PORT_OWNED)
+    named.update(RECOMPILE_AS)
     boot, main_f = add_jal_targets(boot, 0x80000400, rom[0x1000:0x13A10], named, extra_code=[(0x80016AC0 + 0xB900, main_bin[0xB900:0xAA360])]),         add_jal_targets(main_f, 0x80016AC0, main_bin, named, extra_code=[(0x80000400, rom[0x1000:0x13A10])])
     boot = sorted([f for f in boot if not lo_u <= f[0] < hi_u] + UNPACKER)
     # splat's sizes sometimes end inside a function: run each one to the next known start instead
