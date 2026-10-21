@@ -1,7 +1,0 @@
-Device Name: NVIDIA GeForce RTX 4050 Laptop GPU
-Device Vendor: 0x10DE
-Driver Version: 0x200000000f2442
-[thps] runtime initialised; rdram base = 0000012FFFFB0000
-Initializing recomp heap at offset 0x01000000 with size 0x1F000000
-[thps] boot: unpacked 14 chunks of main to 0x80016AC0-0x800F6460; entering 0x800C0480
-[thps] game thread 1 created (entry 0x800F56C8)
