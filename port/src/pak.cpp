@@ -22,6 +22,13 @@ std::filesystem::path settings_directory();   // src/main.cpp
 
 namespace {
 
+// THPS_TRACE_PAK=1: log every low-level pak call (first 300)
+bool trace_pak() { static const bool on = std::getenv("THPS_TRACE_PAK") != nullptr; return on; }
+void tlog(const char* what, int channel, uint32_t block) {
+    static int n = 0;
+    if (trace_pak() && n++ < 300) std::fprintf(stderr, "[thps] pak %s ch%d block 0x%03X\n", what, channel, block);
+}
+
 constexpr size_t kPakSize = 0x8000;            // one bank, 128 pages of 256 bytes
 std::array<uint8_t, kPakSize> g_pak{};
 std::mutex g_pak_lock;
@@ -90,6 +97,7 @@ void thps___osContRamRead(uint8_t* rdram, recomp_context* ctx) {
     const int channel = static_cast<int32_t>(ctx->r5);
     const uint32_t block = static_cast<uint32_t>(ctx->r6) & 0xFFFF;
     const gpr buffer = ctx->r7;
+    tlog("read ", channel, block);
     std::lock_guard lock{ g_pak_lock };
     load();
     for (int i = 0; i < 32; i++) {
@@ -104,6 +112,7 @@ void thps___osContRamWrite(uint8_t* rdram, recomp_context* ctx) {
     const int channel = static_cast<int32_t>(ctx->r5);
     const uint32_t block = static_cast<uint32_t>(ctx->r6) & 0xFFFF;
     const gpr buffer = ctx->r7;
+    tlog("write", channel, block);
     if (channel != 0) {
         ctx->r2 = 1;
         return;
@@ -119,11 +128,13 @@ void thps___osContRamWrite(uint8_t* rdram, recomp_context* ctx) {
 
 // s32 __osPfsGetStatus(OSMesgQueue* mq, int channel): a pak is always present in port 1.
 void thps___osPfsGetStatus(uint8_t*, recomp_context* ctx) {
+    tlog("status", static_cast<int32_t>(ctx->r5), 0);
     ctx->r2 = static_cast<int32_t>(ctx->r5) == 0 ? 0 : 1;
 }
 
 // s32 osPfsIsPlug(OSMesgQueue* mq, u8* pattern): bit per port with a pak.
 void thps_osPfsIsPlug(uint8_t* rdram, recomp_context* ctx) {
+    tlog("isplug", 0, 0);
     MEM_B(0, ctx->r5) = 1;
     ctx->r2 = 0;
 }

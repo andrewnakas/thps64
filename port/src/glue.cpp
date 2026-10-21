@@ -1,5 +1,7 @@
 // Small pieces the Pilotwings-derived glue expects, specialised for THPS.
 #include <cstdint>
+#include <algorithm>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <string>
@@ -126,7 +128,7 @@ extern "C" void thps_osPiRawStartDma(uint8_t* rdram, recomp_context* ctx) {
     const gpr dram = ctx->r6;
     const uint32_t size = static_cast<uint32_t>(ctx->r7);
     static int traced = 0;
-    if (traced++ < 12) {
+    if (traced++ < 400) {
         std::fprintf(stderr, "[thps] PI DMA %s ROM 0x%08X -> 0x%08X size 0x%X (pi mq 0x%08X)\n", direction ? "write" : "read",
                      phys, static_cast<uint32_t>(dram), size, static_cast<uint32_t>(g_pi_mq.load()));
     }
@@ -214,7 +216,47 @@ void watchdog() {
 }
 }  // namespace
 
+namespace {
+// THPS_PROFILE=1: calls per function (all threads), top 20 printed every 5 s and reset.
+std::mutex g_prof_lock;
+std::unordered_map<const char*, uint64_t> g_prof;
+
+void profiler() {
+    for (;;) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::vector<std::pair<const char*, uint64_t>> v;
+        {
+            std::lock_guard lock{ g_prof_lock };
+            v.assign(g_prof.begin(), g_prof.end());
+            g_prof.clear();
+        }
+        std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        static int n_dump = 0;
+        if (const char* dir = std::getenv("THPS_PROFILE_DUMP")) {   // full counts per window, one file each
+            char path[512];
+            std::snprintf(path, sizeof(path), "%s/profile_%03d.txt", dir, n_dump++);
+            if (FILE* f = std::fopen(path, "w")) {
+                for (const auto& [name, count] : v) std::fprintf(f, "%s %llu\n", name, static_cast<unsigned long long>(count));
+                std::fclose(f);
+            }
+        }
+        std::fprintf(stderr, "[thps] profile (5 s):");
+        for (size_t i = 0; i < v.size() && i < 20; i++) std::fprintf(stderr, " %s:%llu", v[i].first, static_cast<unsigned long long>(v[i].second));
+        std::fprintf(stderr, "\n");
+    }
+}
+}  // namespace
+
 extern "C" void thps_trace(const char* name, void* vctx) {
+    static const bool profile = [] {
+        const char* e = std::getenv("THPS_PROFILE");
+        if (e && *e == '1') { std::thread(profiler).detach(); return true; }
+        return false;
+    }();
+    if (profile) {
+        std::lock_guard lock{ g_prof_lock };
+        g_prof[name]++;
+    }
     if (t_slot == nullptr) {
         const int i = g_nslots.fetch_add(1);
         t_slot = &g_slots[i < 64 ? i : 63];
