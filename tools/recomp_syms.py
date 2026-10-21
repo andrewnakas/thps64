@@ -179,6 +179,27 @@ def merge_outside(funcs, vram, data):
     return funcs
 
 
+def merge_fallthrough(funcs, vram, data):
+    """A function that runs off its end into the next one was split at a prologue that is not its start: GCC
+    varargs preambles (sw a1-a3 to the caller's home slots) and divides scheduled before `addiu sp`. Merge them.
+    One that ends in a return/jump with a pool word after it is left alone."""
+    import struct
+    funcs = sorted(funcs)
+
+    def ends(w):
+        return w == 0x03E00008 or w >> 26 == 2 or (w >> 26 == 0 and w & 0x3F == 8) or w >> 16 == 0x1000
+
+    k = 0
+    while k + 1 < len(funcs):
+        a, sz, n = funcs[k]
+        ws = [struct.unpack_from('>I', data, a - vram + 4 * i)[0] for i in range(sz // 4)]
+        if sz >= 8 and funcs[k + 1][0] == a + sz and not any(ends(w) for w in ws[-3:-1]):
+            funcs[k:k + 2] = [(a, sz + funcs[k + 1][1], n)]
+            continue
+        k += 1
+    return funcs
+
+
 def section(name, rom, vram, size, funcs):
     s = [f'[[section]]\nname = "{name}"\nrom = 0x{rom:08X}\nvram = 0x{vram:08X}\nsize = 0x{size:X}\n\nfunctions = [']
     for a, sz, n in funcs:
@@ -237,6 +258,7 @@ def main():
               if a < text_end]
     main_f = add_gaps(main_f, 0x800223C0, text_end)
     main_f = merge_outside(trim(split_leaves(main_f, 0x80016AC0, main_bin), 0x80016AC0, main_bin), 0x80016AC0, main_bin)
+    main_f = merge_fallthrough(main_f, 0x80016AC0, main_bin)
     # COP2 (PSX GTE leftovers: the port emulates the GTE in C, e.g. func_80042D1C) cannot be recompiled. In the
     # recompiler's input only, each COP2-family instruction inside a function becomes `break 0x3F2`, so the
     # runtime stops at that exact address if the game ever reaches one. The decomp keeps the real bytes.
