@@ -93,10 +93,15 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   osPfsIsPlug against <settings>/thps64.mpk (THPS_MPK=path), created formatted. "No Controller Pak" notice gone.
 - **8 MB is the default again** ("Expansion Pak found"; the old 7.5 MB failure was the truncated-function bug).
   THPS_4MB=1 for a stock console.
-- Reaches: notices -> logos -> intro cutscenes -> title -> main menu screen. **Open bug: main menu items are invisible
-  and the menu ignores input** (START/A every few seconds; it idles back to DEMO MODE), same at 4 MB, no runtime
-  errors. Input itself is delivered (THPS_TRACE_INPUT=1: ~30 polls/s, title accepts START). Suspect a fade-in/setup
-  step waiting on something the runtime does not deliver; next: trace the menu code.
+- **Playable to gameplay** (2026-10-21): notices -> logos -> intro -> title -> main menu (all six items, D-pad moves,
+  A accepts) -> rumble notice -> Select Player -> Select Board -> Select Course -> loading tip -> Warehouse free skate
+  with HUD. Scripted path: THPS_PRESS="A@4,START@25,START@28.5,DDOWN@33,DDOWN@34,DDOWN@35,A@37,A@42,A@47,A@52,A@57,A@66"
+  (times depend on load speed; title shows around 22-25 s).
+  - The empty, input-dead main menu was a function split: the menu builder func_8003C1A4 is varargs and GCC puts
+    `sw a1-a3, 4..C(sp)` before `addiu sp`; that preamble had become its own 12-byte function, so the recompiled call
+    stored its args and returned with zero items. recomp_syms `merge_fallthrough` merges any function that runs off
+    its end into the next (5 in main: two varargs preambles, a div scheduled before the prologue, a mid-split).
+    Lesson: check for functions that do not end in jr/j before chasing runtime causes.
 
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat
