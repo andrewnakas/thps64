@@ -110,6 +110,10 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   via zig's LLVM assembler, ld.lld, per-function placement). Handles: COP2 as raw words, gas 16-byte .text padding
   trimmed, undefined label/addr symbols defined from their names (two-pass link), uncovered pool words, empty funcs.
   Second Steward gate ("build"), runs in ~2-3 min.
+- `tools/split.py`: re-split from scratch (find_funcs -> wipe asm/ -> splat -> config/functions.csv). Always use it:
+  splat leaves .s files of functions that no longer exist and build.py links them all. find_funcs now walks varargs
+  preambles (sw a0-a3 to home slots) back to the real start and drops prologues that real code runs into (div before
+  `addiu sp`, prologue in a delay slot): 1834 functions, build still byte-identical (2026-10-21).
 - `tools/new_func.py func_X`: m2c draft into src/funcs + match attempt. `tools/match.py`: readable compile errors.
 - `tools/progress.py [--json]`: matched functions/bytes. m2c + decomp-permuter cloned in E:/thps64-tools.
 
