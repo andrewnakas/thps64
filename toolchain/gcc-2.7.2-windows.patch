@@ -1,0 +1,32 @@
+diff --git a/config/mips/mips.c b/config/mips/mips.c
+index 1846213..f1d4fc7 100644
+--- a/config/mips/mips.c
++++ b/config/mips/mips.c
+@@ -3960,6 +3960,10 @@ make_temp_file ()
+   char *base = getenv ("TMPDIR");
+   int len;
+ 
++#ifdef _WIN32
++  if (base == (char *)0)
++    base = getenv ("TEMP");
++#endif
+   if (base == (char *)0)
+     {
+ #ifdef P_tmpdir
+@@ -3983,11 +3987,15 @@ make_temp_file ()
+   strcpy (temp_filename + len, "ctXXXXXX");
+   mktemp (temp_filename);
+ 
++#ifdef _WIN32
++  stream = fopen (temp_filename, "w+bD");  /* D: deleted when closed */
++#else
+   stream = fopen (temp_filename, "w+");
++#endif
+   if (!stream)
+     pfatal_with_name (temp_filename);
+ 
+-#ifndef __MSDOS__
++#if !defined(__MSDOS__) && !defined(_WIN32)
+   /* In MSDOS, we cannot unlink the temporary file until we are finished using
+      it.  Otherwise, we delete it now, so that it will be gone even if the
+      compiler happens to crash.  */

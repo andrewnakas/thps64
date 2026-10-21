@@ -1,0 +1,15 @@
+#!/bin/sh
+# zig as a 32-bit Windows host compiler for old GCC sources; extensionless outputs get a .exe twin,
+# and "-c foo.c" without -o writes foo.o (zig would write foo.obj for a Windows target)
+Z=/c/Users/andre/.local/zig-x86_64-windows-0.16.0/zig.exe
+out=""; prev=""; compile=0; src=""
+for a in "$@"; do
+  [ "$prev" = "-o" ] && out="$a"
+  [ "$a" = "-c" ] && compile=1
+  case "$a" in *.c) src="$a";; esac
+  prev="$a"
+done
+extra=""
+if [ $compile = 1 ] && [ -z "$out" ] && [ -n "$src" ]; then b=$(basename "$src" .c); extra="-o $b.o"; fi
+"$Z" cc -target x86-windows-gnu -I/e/thps64-tools/compat -std=gnu89 -w -Wno-error -Wno-implicit-function-declaration -Wno-int-conversion -Wno-return-type -Wno-incompatible-pointer-types -fno-sanitize=undefined "$@" $extra || exit $?
+case "$out" in *.*|"") ;; *) [ -f "$out" ] && cp -f "$out" "$out.exe";; esac

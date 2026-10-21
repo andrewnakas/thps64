@@ -1,0 +1,23 @@
+diff --git a/gas/input-file.c b/gas/input-file.c
+index 2092526..bf09cef 100644
+--- a/gas/input-file.c
++++ b/gas/input-file.c
+@@ -151,7 +151,7 @@ char* read_asm(const char *pathname, size_t* output_size) {
+     char *cur_input_pos;
+     char cur_insn_first_char;
+ 
+-    fd = fopen(pathname, "r");
++    fd = fopen(pathname, "rb");  /* binary: the loop below folds CRLF itself */
+     if (fd == NULL)
+     {
+         as_fatal ("Can't open %s for reading.", pathname);
+@@ -329,7 +329,9 @@ input_file_open (filename, pre)
+       // Create a temp file to hold the processed output
+       char temp_filename[] = "astemp_XXXXXX.s";
+       int fd = mkstemps(temp_filename, 2);
++#ifndef _WIN32
+       unlink(temp_filename);
++#endif
+       // Process the input file
+       size_t processed_size;
+       char* processed = read_asm(filename, &processed_size);
