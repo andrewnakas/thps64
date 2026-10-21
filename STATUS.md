@@ -48,7 +48,9 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 - **COP2 / GTE:** THPS N64 is a PSX port; the GTE is emulated in C (e.g. func_80042D1C, regs around 0x800D48A4), but
   6 leftover COP2 instructions sit in functions (mfc2 $25-27 at 0x8005D264...). In the recomp input they become
   `break 0x3F2` (recomp/cop2_sites.txt), so the runtime stops there if the game ever reaches one.
-- Open: 6 main functions branch outside themselves (over-split; merge them), then compile RecompiledFuncs with a
+- Over-splits merged (`merge_outside`). `tools/gen_reimplemented_decls.py` declares the runtime's <name>_recomp
+  libultra (440 names); **`tools/recomp_compile.sh`: all 55 generated C files compile with clang, 0 errors.**
+- Open: link RecompiledFuncs with a
   runtime (N64ModernRuntime + RT64, as the PW64 port does) and boot with a custom entry that skips the ERZ loader.
 
 ## Blocked on the owner
