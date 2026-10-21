@@ -6,12 +6,14 @@ symbols_file_path = "thps.syms.toml"
 rom_file_path = "../work/recomp.z64"
 output_func_path = "RecompiledFuncs"
 functions_per_output_file = 50
+# every function records its entry (recomp/include/trace.h): cheap, and what finds stalls
+trace_mode = true
 # the generated code calls libultra functions the runtime reimplements as <name>_recomp
 recomp_include = """#include "recomp.h"
 #include "reimplemented_decls.h""""
 
 [patches]
 # boot's ERZ unpacker (hand-written asm): the recomp runs main from the unpacked image, so it is never needed
-stubs = ["func_80000C40", "func_80000CEC", "func_80000DAC", "func_80000DB8", "func_80000DC4", "func_80001318", "func_80001328", "func_800013F8", "func_80002180", "func_800026C4", "func_80002904", "func_80002AA0", "func_80002BE0", "func_80002C40", "func_800035A0", "func_80007400", "func_80007650", "func_800080F0", "func_8000CAD0", "func_80001088", "func_80001224", "func_800014C4", "func_80001718", "func_8000176C", "func_8000179C", "func_800017F4"]
+stubs = ["func_80002180", "func_800026C4", "func_80002904", "func_80002AA0", "func_80002BE0", "func_80002C40", "func_800035A0", "func_80007400", "func_80007650", "func_800080F0", "func_8000CAD0", "func_80097D34", "func_800998CC", "func_8009AC5C"]
 # boot main: replaced by port/src/boot.cpp (unpacks main from the ROM in C++, then enters 0x800C0480)
-ignored = ["func_80000870"]
+ignored = ["func_80000870", "thps_osSetEventMesg", "thps_osPiRawStartDma", "thps_osRecvMesg", "thps_osSendMesg"]

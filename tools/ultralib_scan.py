@@ -58,6 +58,17 @@ def compile_ido(ul, rel, version):
         small = os.path.join(tmp, 'x.i')
         open(small, 'w', encoding='latin1', newline='\n').write('\n'.join(lines) + '\n')
         if os.path.getsize(small) > 32000:
+            # drop prototypes of functions the file never mentions again (headers declare all of libultra)
+            import re as _re
+            body = '\n'.join(lines)
+            kept = []
+            for line in lines:
+                m = _re.match(r'^(?:extern\s+)?[\w\s\*]+?\b(\w+)\s*\([^{;]*\)\s*;$', line)
+                if m and len(_re.findall(r'\b' + m.group(1) + r'\b', body)) == 1:
+                    continue
+                kept.append(line)
+            open(small, 'w', encoding='latin1', newline='\n').write('\n'.join(kept) + '\n')
+        if os.path.getsize(small) > 32000:
             return 'big'
         r = subprocess.run([f'{IDO}/cc.exe', '-c', '-Wab,-r4300_mul', '-G', '0', '-Xcpluscomm', '-w', '-mips2', '-o32',
                             '-non_shared', opt, 'x.i', '-o', 'x.o'], capture_output=True, cwd=tmp)

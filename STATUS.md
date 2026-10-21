@@ -58,6 +58,21 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 - Open: first run (when the owner says), then name the remaining boot libultra so the runtime replaces it, and a
   runtime (N64ModernRuntime + RT64, as the PW64 port does) and boot with a custom entry that skips the ERZ loader.
 
+## Port bring-up (2026-10-21, owner said "get it all working")
+- **Runs:** boot -> 7 game threads -> game loop, display lists reach RT64 every frame, stable over 60 s (hidden test
+  runs: `port/run.ps1 [seconds]`, env THPS_HIDDEN/THPS_WATCH/THPS_TRACE_FN/THPS_SAMPLE). Not yet looked at the image.
+- Fixes on the way (each was a hang or crash):
+  - boot.cpp also copies the asset base (ROM 0x13B10 -> 0x80011C2C) and chunk table (-> 0x803C0000) like boot main.
+  - game uses its own PI DMA thread (OS_EVENT_PI + osPiRawStartDma): port owns thps_osSetEventMesg/thps_osPiRawStartDma.
+  - boot's ERZ unpackers are recompiled whole (game unpacks files through 0x80000B08); no longer stubbed.
+  - osMemSize reported as 4 MB (THPS_8MB=1 for 8 MB).
+  - function starts: vtable {ptr,0} targets, gap scan, preamble before `addiu sp` (lui/lw), sizes to next start.
+  - ~30 libultra functions named by hand from the call graph (controller, motor, VI, MI/AI, interrupts) in
+    config/boot_symbols.txt, so the runtime replaces them; a few internals stubbed in port/src/glue.cpp.
+- Debug kit: N64Recomp trace_mode -> per-thread last function + call ring + waited-on queue (watchdog), queue dumps,
+  native stack walk of stalled threads, per-function argument logging.
+- Next for the port: audio (RSP audio microcode at 0x80097C40 is reported complete, so silent); visual check.
+
 ## Blocked on the owner
 - GitHub repo for this project (private) + Steward App install: after the passkey step.
 

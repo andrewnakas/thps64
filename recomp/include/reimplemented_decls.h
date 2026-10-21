@@ -447,6 +447,10 @@ void viMgrMain_recomp(uint8_t* rdram, recomp_context* ctx);
 void vsprintf_recomp(uint8_t* rdram, recomp_context* ctx);
 /* functions recomp/thps.toml marks ignored: the port defines them */
 void func_80000870(uint8_t* rdram, recomp_context* ctx);
+void thps_osPiRawStartDma(uint8_t* rdram, recomp_context* ctx);
+void thps_osRecvMesg(uint8_t* rdram, recomp_context* ctx);
+void thps_osSendMesg(uint8_t* rdram, recomp_context* ctx);
+void thps_osSetEventMesg(uint8_t* rdram, recomp_context* ctx);
 #ifdef __cplusplus
 }
 #endif

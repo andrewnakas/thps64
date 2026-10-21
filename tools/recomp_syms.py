@@ -88,6 +88,18 @@ def looks_like_code(ws):
     return end == 0x03E00008 or end >> 26 == 2 or (end >> 26 == 0 and end & 0x3F == 8)
 
 
+def add_gaps(funcs, lo, hi):
+    """Gaps between known functions inside .text become candidates ('gap_'): split_leaves keeps only the pieces
+    that look like code (splat sometimes swallows small functions after a constant pool as data)."""
+    funcs = sorted(funcs)
+    out, pos = list(funcs), lo
+    for a, sz, _ in funcs + [(hi, 0, '')]:
+        if a > pos + 4:
+            out.append((pos, a - pos, f'gap_{pos:08X}'))
+        pos = max(pos, a + sz)
+    return sorted(out)
+
+
 def split_leaves(funcs, vram, data):
     """Split a function after a `jr $ra` + delay slot that no earlier branch jumps past; the next valid
     instruction starts a new function (runs of small leaf functions with data words between them)."""
@@ -103,7 +115,7 @@ def split_leaves(funcs, vram, data):
             if t is not None:
                 reach = max(reach, t)
             if ws[i] == 0x03E00008 and i + 2 < len(ws) and reach <= i + 1:
-                if start == 0 or looks_like_code(ws[start:i + 2]):
+                if (start == 0 and not n.startswith('gap_')) or looks_like_code(ws[start:i + 2]):
                     out.append((a + 4 * start, 4 * (i + 2 - start), n if start == 0 else f'func_{a + 4 * start:08X}'))
                 j = i + 2
                 while j < len(ws) and (not rabbitizer.Instruction(ws[j]).isValid() or ws[j] == 0):
@@ -111,8 +123,9 @@ def split_leaves(funcs, vram, data):
                 start, reach, i = j, j, j
                 continue
             i += 1
-        if start < len(ws) and (start == 0 or looks_like_code(ws[start:])):
+        if start < len(ws) and ((start == 0 and not n.startswith('gap_')) or looks_like_code(ws[start:])):
             out.append((a + 4 * start, 4 * (len(ws) - start), n if start == 0 else f'func_{a + 4 * start:08X}'))
+    out = [(a, sz, f'func_{a:08X}' if n.startswith('gap_') else n) for a, sz, n in out]
     return out
 
 
@@ -184,13 +197,33 @@ def main():
     if not any(a == 0x80000400 for a, _, _ in boot):   # entry: sp, bss clear, jal 0x80000870 (splat calls it data)
         boot = sorted(boot + [(0x80000400, 0x68, 'entrypoint')])
     main_f = functions(os.path.join(ROOT, 'asm'))
+    # boot functions the port implements itself (recomp/thps.toml `ignored`, port/src/glue.cpp): renamed so N64Recomp
+    # does not hand them to the runtime, whose versions do not fit THPS (no OS_EVENT_PI, aborting raw DMA stub)
+    # Boot's hand-written ERZ unpackers, as whole routines (the game calls them through 0x80000B08 to unpack its
+    # files). Split at every label they could not be recompiled; as single functions every jump stays inside.
+    UNPACKER = [(0x80000B08, 0xA0, 'erz_unpack_any'), (0x80000C40, 0xA8, 'erz2_unpack'), (0x80000CE8, 0x640, 'erz2_body'),
+                (0x80001330, 0xC8, 'erz1_unpack'), (0x800013F8, 0x1B4, 'erz1_0'), (0x800015AC, 0xD8, 'erz1_1'),
+                (0x80001684, 0x34, 'erz1_2'), (0x800016B8, 0x3C, 'erz1_3'), (0x800016F4, 0x24, 'erz1_4'),
+                (0x80001718, 0x180, 'erz1_5'), (0x80001898, 0x24, 'erz1_6')]
+    lo_u, hi_u = 0x80000B08, 0x800018BC
+    boot = [f for f in boot if not lo_u <= f[0] < hi_u] + UNPACKER
+    PORT_OWNED = {0x80002E00: 'thps_osSetEventMesg', 0x80004770: 'thps_osPiRawStartDma', 0x80004ED0: 'thps_osRecvMesg', 0x80005070: 'thps_osSendMesg'}
+    boot = [(a, sz, PORT_OWNED.get(a, n)) for a, sz, n in boot]
     # every jal target is a function, even where splat saw data (libultra helpers like fcos)
     named = {}
     for line in open(os.path.join(ROOT, 'config', 'boot_symbols.txt')):
         m = re.match(r'(\w+) = 0x([0-9A-F]{8})', line)
         if m:
             named[int(m.group(2), 16)] = m.group(1)
-    boot, main_f = add_jal_targets(boot, 0x80000400, rom[0x1000:0x13A10], named, extra_code=[(0x80016AC0, main_bin)]),         add_jal_targets(main_f, 0x80016AC0, main_bin, named, extra_code=[(0x80000400, rom[0x1000:0x13A10])])
+    named.update(PORT_OWNED)
+    boot, main_f = add_jal_targets(boot, 0x80000400, rom[0x1000:0x13A10], named, extra_code=[(0x80016AC0 + 0xB900, main_bin[0xB900:0xAA360])]),         add_jal_targets(main_f, 0x80016AC0, main_bin, named, extra_code=[(0x80000400, rom[0x1000:0x13A10])])
+    boot = sorted([f for f in boot if not lo_u <= f[0] < hi_u] + UNPACKER)
+    # splat's sizes sometimes end inside a function: run each one to the next known start instead
+    starts = sorted(main_f)
+    text_end = 0x80016AC0 + 0xAA360
+    main_f = [(a, (starts[k + 1][0] if k + 1 < len(starts) else text_end) - a, n) for k, (a, _, n) in enumerate(starts)
+              if a < text_end]
+    main_f = add_gaps(main_f, 0x800223C0, text_end)
     main_f = merge_outside(trim(split_leaves(main_f, 0x80016AC0, main_bin), 0x80016AC0, main_bin), 0x80016AC0, main_bin)
     # COP2 (PSX GTE leftovers: the port emulates the GTE in C, e.g. func_80042D1C) cannot be recompiled. In the
     # recompiler's input only, each COP2-family instruction inside a function becomes `break 0x3F2`, so the

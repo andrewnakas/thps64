@@ -68,7 +68,8 @@ void on_init(uint8_t* rdram, recomp_context* ctx) {
 void on_thread_create(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     static int count = 0;
-    std::printf("[thps] game thread %d created (entry 0x%08X)\n", ++count, static_cast<uint32_t>(ctx->r4));
+    std::printf("[thps] game thread %d created: OSThread 0x%08X id %d entry 0x%08X\n", ++count,
+                static_cast<uint32_t>(ctx->r4), static_cast<int32_t>(ctx->r5), static_cast<uint32_t>(ctx->r6));
 }
 
 int identify(const char* path) {

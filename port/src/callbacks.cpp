@@ -1002,7 +1002,7 @@ void gfx_init_callback() {
 
 void message_box(const char* msg) {
     std::fprintf(stderr, "%s\n", msg);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pilotwings 64: Recompiled", msg, g_window);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "THPS64 Recompiled", msg, g_window);
 }
 
 // -------------------------------------------------------------- threads ----
@@ -1090,7 +1090,15 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
         }
     }
 
-    g_window = SDL_CreateWindow("Pilotwings 64: Recompiled",
+    // THPS_ONTOP=1 keeps the window above everything, so verification captures photograph only the game.
+    if (const char* top = std::getenv("THPS_ONTOP"); top != nullptr && *top == '1') {
+        flags |= SDL_WINDOW_ALWAYS_ON_TOP;
+    }
+    // THPS_HIDDEN=1 keeps the window off screen for scripted test runs.
+    if (const char* hid = std::getenv("THPS_HIDDEN"); hid != nullptr && *hid == '1') {
+        flags |= SDL_WINDOW_HIDDEN;
+    }
+    g_window = SDL_CreateWindow("THPS64 Recompiled",
                                 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                 width, height, flags);
     if (g_window == nullptr) {

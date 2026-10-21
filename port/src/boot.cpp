@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <vector>
@@ -18,9 +19,9 @@
 extern "C" {
 void osInitialize_recomp(uint8_t* rdram, recomp_context* ctx);
 void osCreateMesgQueue_recomp(uint8_t* rdram, recomp_context* ctx);
-void osSetEventMesg_recomp(uint8_t* rdram, recomp_context* ctx);
+void thps_osSetEventMesg(uint8_t* rdram, recomp_context* ctx);
 void osAiSetFrequency_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_80003010(uint8_t* rdram, recomp_context* ctx);
+void osViBlack_recomp(uint8_t* rdram, recomp_context* ctx);
 void thps_main(uint8_t* rdram, recomp_context* ctx);
 }
 
@@ -125,15 +126,24 @@ void call(void (*fn)(uint8_t*, recomp_context*), uint8_t* rdram, recomp_context*
 extern "C" void func_80000870(uint8_t* rdram, recomp_context* ctx) {   // not RECOMP_FUNC: that is "extern inline" (weak) and would be dropped
     // The libultra setup boot main does first (see the disassembly at 0x80000870).
     call(osInitialize_recomp, rdram, ctx);
-    call(func_80003010, rdram, ctx, 1);
+    call(osViBlack_recomp, rdram, ctx, 1);
     call(osAiSetFrequency_recomp, rdram, ctx, 0x5622);
     call(osCreateMesgQueue_recomp, rdram, ctx, int32_t(0x80011C10), int32_t(0x80011C28), 1);
-    call(osSetEventMesg_recomp, rdram, ctx, 0xE, int32_t(0x80011C10), 0);
+    call(thps_osSetEventMesg, rdram, ctx, 0xE, int32_t(0x80011C10), 0);
 
     for (uint32_t a = kBssStart; a < kBssEnd; a++) put_byte(rdram, a, 0);
 
     const std::span<const uint8_t> rom = recomp::get_rom();
     const uint32_t n = be32(rom.data() + kChunkTable);
+
+    // What boot main copies before unpacking (see 0x80000900..0x80000968): the asset area's PI address (ROM 0x13B10,
+    // 0xB0061E26 in V1.1) to 0x80011C2C, which the game's file code reads, and the chunk table to 0x803C0000.
+    auto put_word = [&](uint32_t vaddr, uint32_t w) { for (int b = 0; b < 4; b++) put_byte(rdram, vaddr + b, uint8_t(w >> (24 - 8 * b))); };
+    put_word(0x80011C2C, be32(rom.data() + 0x13B10));
+    // osMemSize: the runtime reports 8 MB (Expansion Pak); THPS sizes a 7.5 MB allocation from it that its heap
+    // cannot satisfy. Report a stock 4 MB console unless THPS_8MB=1.
+    if (const char* e = std::getenv("THPS_8MB"); e == nullptr || *e != '1') put_word(0x80000318, 0x00400000);
+    for (uint32_t k = 0; k < n + 2; k++) put_word(0x803C0000 + 4 * k, be32(rom.data() + kChunkTable + 4 * k));
     uint32_t dst = kMainVram;
     std::vector<uint8_t> chunk;
     for (uint32_t i = 0; i < n; i++) {

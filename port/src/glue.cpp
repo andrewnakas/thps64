@@ -1,5 +1,8 @@
 // Small pieces the Pilotwings-derived glue expects, specialised for THPS.
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "recomp.h"
 #include "librecomp/rsp.hpp"
@@ -41,4 +44,174 @@ void __osResetGlobalIntMask_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
 void __osSetGlobalIntMask_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
 void __osSiRawStartDma_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
 void __osTimerInterrupt_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
+void __osSiGetAccess_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
+void __osViInit_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
+void __osViGetCurrentContext_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }   // only the replaced VI manager uses it
+void __osSiRelAccess_recomp(uint8_t*, recomp_context* ctx) { ret0(ctx); }
+void __osPfsGetStatus_recomp(uint8_t*, recomp_context* ctx) { ctx->r2 = 1; }   // PFS_ERR_NOPACK
+}
+
+// ---- PI: the game's own DMA thread (func_800BAE84) --------------------------------------------------------------
+// It registers a queue for OS_EVENT_PI, starts each transfer with osPiRawStartDma and waits for that event. The
+// runtime knows no OS_EVENT_PI and only has an aborting stub for osPiRawStartDma, so the port owns both (renamed in
+// tools/recomp_syms.py, `ignored` in recomp/thps.toml): the transfer is done at once and the event posted.
+#include <atomic>
+#include <ultramodern/ultramodern.hpp>
+#include "librecomp/game.hpp"
+
+namespace {
+std::atomic<int32_t> g_pi_mq{ 0 };
+std::atomic<int32_t> g_pi_msg{ 0 };
+constexpr int32_t kOsEventPi = 8;
+}
+
+extern "C" void osSetEventMesg_recomp(uint8_t* rdram, recomp_context* ctx);
+
+extern "C" void thps_osSetEventMesg(uint8_t* rdram, recomp_context* ctx) {
+    std::fprintf(stderr, "[thps] osSetEventMesg(%d, 0x%08X, 0x%X)\n", static_cast<int32_t>(ctx->r4),
+                 static_cast<uint32_t>(ctx->r5), static_cast<uint32_t>(ctx->r6));
+    if (static_cast<int32_t>(ctx->r4) == kOsEventPi) {
+        g_pi_mq = static_cast<int32_t>(ctx->r5);
+        g_pi_msg = static_cast<int32_t>(ctx->r6);
+        return;
+    }
+    osSetEventMesg_recomp(rdram, ctx);
+}
+
+// s32 osPiRawStartDma(s32 direction, u32 devAddr, void* dramAddr, u32 size)
+extern "C" void thps_osPiRawStartDma(uint8_t* rdram, recomp_context* ctx) {
+    const int32_t direction = static_cast<int32_t>(ctx->r4);
+    const uint32_t phys = (static_cast<uint32_t>(ctx->r5) | 0x10000000u) & 0x1FFFFFFFu;
+    const gpr dram = ctx->r6;
+    const uint32_t size = static_cast<uint32_t>(ctx->r7);
+    static int traced = 0;
+    if (traced++ < 12) {
+        std::fprintf(stderr, "[thps] PI DMA %s ROM 0x%08X -> 0x%08X size 0x%X (pi mq 0x%08X)\n", direction ? "write" : "read",
+                     phys, static_cast<uint32_t>(dram), size, static_cast<uint32_t>(g_pi_mq.load()));
+    }
+    if (direction == 0) {
+        recomp::do_rom_read(rdram, dram, phys, size);
+    } else {
+        std::fprintf(stderr, "[thps] osPiRawStartDma write to 0x%08X ignored\n", phys);
+    }
+    if (g_pi_mq != 0) {
+        ultramodern::enqueue_external_message_src(g_pi_mq, g_pi_msg, false, ultramodern::EventMessageSource::Pi);
+    }
+    ctx->r2 = 0;
+}
+
+// osRecvMesg with a trace of blocking receives (THPS_TRACE_RECV=1): which queue each thread waits on, to find stalls.
+extern "C" void osRecvMesg_recomp(uint8_t* rdram, recomp_context* ctx);
+extern "C" void thps_set_waiting(uint32_t mq);
+extern "C" void thps_osRecvMesg(uint8_t* rdram, recomp_context* ctx) {
+    thps_set_waiting(static_cast<uint32_t>(ctx->r4));
+    static const bool trace = [] { const char* e = std::getenv("THPS_TRACE_RECV"); return e && *e == '1'; }();
+    if (trace && static_cast<int32_t>(ctx->r6) == 1) {
+        const uint32_t mq = static_cast<uint32_t>(ctx->r4);
+        const int32_t count = MEM_W(0x8, static_cast<int32_t>(mq));   // OSMesgQueue.validCount
+        if (count == 0) {
+            std::fprintf(stderr, "[thps] recv blocks: mq 0x%08X ra 0x%08X\n", mq, static_cast<uint32_t>(ctx->r31));
+        }
+    }
+    osRecvMesg_recomp(rdram, ctx);
+    thps_set_waiting(0);
+}
+
+// ---- trace_mode: last recompiled function entered, per thread (recomp/include/trace.h) ---------------------------
+#include <chrono>
+#if defined(_WIN32)
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+#endif
+#include "thps/crash_handler.h"
+#include <mutex>
+#include <thread>
+namespace {
+struct TraceSlot {
+    std::atomic<const char*> last{ nullptr }; std::atomic<uint64_t> calls{ 0 }; std::atomic<uint32_t> waiting_mq{ 0 };
+    std::atomic<const char*> ring[8]{};
+    void* handle = nullptr;
+};
+TraceSlot g_slots[64];
+std::atomic<int> g_nslots{ 0 };
+thread_local TraceSlot* t_slot = nullptr;
+
+void watchdog() {
+    uint64_t prev[64] = {};
+    for (;;) {
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        const int n = g_nslots.load();
+        for (int i = 0; i < n; i++) {
+            const uint64_t c = g_slots[i].calls.load();
+            const char* last = g_slots[i].last.load();
+            std::fprintf(stderr, "[thps] watch t%d: %-28s +%llu calls  waiting on mq 0x%08X\n", i, last ? last : "-",
+                         static_cast<unsigned long long>(c - prev[i]), g_slots[i].waiting_mq.load());
+            if (c == prev[i] && c > 0 && g_slots[i].waiting_mq.load() == 0 && g_slots[i].handle != nullptr
+                && std::getenv("THPS_SAMPLE") != nullptr) {
+                char what[32];
+                std::snprintf(what, sizeof(what), "thread t%d", i);
+                thps::sample_thread(g_slots[i].handle, what);
+            }
+            if (const uint32_t wq = g_slots[i].waiting_mq.load() & ~1u; wq != 0 && c == prev[i] && thps::g_rdram != nullptr) {
+                uint8_t* rdram = thps::g_rdram;   // MEM_W needs it by this name
+                std::fprintf(stderr, "[thps]   mq 0x%08X: mtqueue 0x%08X fullqueue 0x%08X validCount %d first %d msgCount %d\n",
+                             wq, static_cast<uint32_t>(MEM_W(0x0, static_cast<int32_t>(wq))),
+                             static_cast<uint32_t>(MEM_W(0x4, static_cast<int32_t>(wq))), MEM_W(0x8, static_cast<int32_t>(wq)),
+                             MEM_W(0xC, static_cast<int32_t>(wq)), MEM_W(0x10, static_cast<int32_t>(wq)));
+            }
+            if (c == prev[i] && c > 0) {   // stalled: show how it got there (oldest first)
+                std::fprintf(stderr, "[thps]   t%d recent:", i);
+                for (uint64_t j = c >= 8 ? c - 8 : 0; j < c; j++) {
+                    const char* r = g_slots[i].ring[j & 7].load();
+                    std::fprintf(stderr, " %s", r ? r : "-");
+                }
+                std::fprintf(stderr, "\n");
+            }
+            prev[i] = c;
+        }
+    }
+}
+}  // namespace
+
+extern "C" void thps_trace(const char* name, void* vctx) {
+    if (t_slot == nullptr) {
+        const int i = g_nslots.fetch_add(1);
+        t_slot = &g_slots[i < 64 ? i : 63];
+#if defined(_WIN32)
+        HANDLE h = nullptr;
+        DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &h, 0, FALSE, DUPLICATE_SAME_ACCESS);
+        t_slot->handle = h;
+#endif
+        static std::once_flag once;
+        std::call_once(once, [] {
+            const char* e = std::getenv("THPS_WATCH");
+            if (e && *e == '1') std::thread(watchdog).detach();
+        });
+    }
+    t_slot->last.store(name, std::memory_order_relaxed);
+    // THPS_TRACE_FN=<name>: log the first calls' arguments of one function
+    static const char* watch_fn = std::getenv("THPS_TRACE_FN");
+    if (watch_fn != nullptr && std::strcmp(name, watch_fn) == 0) {
+        static std::atomic<int> logged{ 0 };
+        if (logged.fetch_add(1) < 5000) {
+            const recomp_context* c = static_cast<const recomp_context*>(vctx);
+            std::fprintf(stderr, "[thps] %s(a0=0x%08X a1=0x%08X a2=0x%08X a3=0x%08X) t%d\n", name,
+                         static_cast<uint32_t>(c->r4), static_cast<uint32_t>(c->r5), static_cast<uint32_t>(c->r6),
+                         static_cast<uint32_t>(c->r7), static_cast<int>(t_slot - g_slots));
+        }
+    }
+    const uint64_t k = t_slot->calls.fetch_add(1, std::memory_order_relaxed);
+    t_slot->ring[k & 7].store(name, std::memory_order_relaxed);
+}
+
+extern "C" void thps_set_waiting(uint32_t mq) {
+    if (t_slot != nullptr) t_slot->waiting_mq.store(mq, std::memory_order_relaxed);
+}
+
+// osSendMesg, recording a blocking send (bit 0 set in the watchdog's queue address) so lock waits show up too.
+extern "C" void osSendMesg_recomp(uint8_t* rdram, recomp_context* ctx);
+extern "C" void thps_osSendMesg(uint8_t* rdram, recomp_context* ctx) {
+    thps_set_waiting(static_cast<uint32_t>(ctx->r4) | 1u);
+    osSendMesg_recomp(rdram, ctx);
+    thps_set_waiting(0);
 }

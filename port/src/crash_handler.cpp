@@ -331,6 +331,42 @@ void report_hang(HANDLE thread, const char* what, int seconds) {
     std::fflush(stderr);
 }
 
+// Samples a stalled thread's instruction pointer (see report_hang); the THPS watchdog in glue.cpp calls this.
+void sample_thread_impl(void* thread_, const char* what) {
+    // A blocked thread sits in one kernel wait, so a sampled RIP says little: walk its whole stack instead.
+    HANDLE thread = static_cast<HANDLE>(thread_);
+    std::fprintf(stderr, "[thps] ---- stack of %s ----\n", what);
+    if (!ensure_symbols() || SuspendThread(thread) == static_cast<DWORD>(-1)) {
+        return;
+    }
+    CONTEXT context = {};
+    context.ContextFlags = CONTEXT_FULL;
+    if (GetThreadContext(thread, &context)) {
+        STACKFRAME64 frame = {};
+        frame.AddrPC.Offset = context.Rip;
+        frame.AddrPC.Mode = AddrModeFlat;
+        frame.AddrFrame.Offset = context.Rbp;
+        frame.AddrFrame.Mode = AddrModeFlat;
+        frame.AddrStack.Offset = context.Rsp;
+        frame.AddrStack.Mode = AddrModeFlat;
+        std::vector<void*> pcs;
+        for (int i = 0; i < 24; ++i) {
+            if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, GetCurrentProcess(), thread, &frame, &context, nullptr,
+                             SymFunctionTableAccess64, SymGetModuleBase64, nullptr) || frame.AddrPC.Offset == 0) {
+                break;
+            }
+            pcs.push_back(reinterpret_cast<void*>(frame.AddrPC.Offset));
+        }
+        ResumeThread(thread);
+        for (void* pc : pcs) {
+            describe_address("  ", pc);
+        }
+    } else {
+        ResumeThread(thread);
+    }
+    std::fflush(stderr);
+}
+
 void watch_thread() {
     for (;;) {
         Sleep(100);
@@ -397,6 +433,10 @@ extern "C" void pw64_report_lookup_miss(unsigned int addr, void* return_address)
 }
 
 namespace thps {
+
+void sample_thread(void* thread, const char* what) {
+    sample_thread_impl(thread, what);
+}
 
 void install_crash_handler() {
     AddVectoredExceptionHandler(1, on_exception);
@@ -467,6 +507,7 @@ namespace thps {
 void install_crash_handler() {}
 
 void watch_for_hang(const char*, int) {}
+void sample_thread(void*, const char*) {}
 void watch_done() {}
 
 }  // namespace thps

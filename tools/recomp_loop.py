@@ -36,9 +36,10 @@ def main():
         why = [l for l in out.splitlines() if l.strip() and not l.startswith(('[Info]', 'Function count', 'Working dir'))
                and 'Error' not in l]
         why = why[-1] if why else ''
-        if a >= 0x80016AC0:
+        if a >= 0x80016AC0 and not re.search(r'cop0|instruction: cache', why):
             print(f'STOP: game function {name} ({a:#x}): {why[:200]}')
             return 1
+        # boot libultra internals, and game functions that only poke cop0 (TLB/debug leftovers), become stubs
         open(cfg_p, 'w').write(cfg.replace('stubs = [' + stubs + ']', 'stubs = [' + stubs + f', "{name}"]'))
         print(f'stubbed {name} {a:#x}: {why[:100]}')
     return 1

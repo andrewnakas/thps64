@@ -61,3 +61,36 @@ osCreateViManager = 0x80011100; // type:func
 osViSetEvent = 0x80011470; // type:func
 osViSetMode = 0x800114E0; // type:func
 osViSetYScale = 0x80011680; // type:func
+// hand-identified from the call graph (tools: see STATUS.md "libultra"), older libultra than ultralib reproduces
+osContInit = 0x800077C0; // type:func   osGetTime/osSetTimer wait, request-status pack, SI DMA x2, __osContGetInitData
+__osSiGetAccess = 0x80007750; // type:func
+__osSiRelAccess = 0x80007794; // type:func
+__osContGetInitData = 0x800079B8; // type:func
+__osPackRequestData = 0x80007A88; // type:func   writes 0xFF,1,3,cmd per channel into __osContPifRam
+osPfsIsPlug = 0x8000AE60; // type:func
+__osPfsGetStatus = 0x8000C3A0; // type:func
+__osContRamRead = 0x800088B0; // type:func
+__osContRamWrite = 0x80009B10; // type:func
+osMotorInit = 0x8000C900; // type:func   writes 0x80 through __osContRamWrite (rumble pak probe)
+osMotorStart = 0x8000C4B0; // type:func   start/stop order is a guess (identical code, own buffers)
+osMotorStop = 0x8000C618; // type:func
+// VI and interrupt helpers (all read __osViNext 0x80011CF4 / __osViCurr 0x80011CF0, which the runtime's VI replaces)
+osViBlack = 0x80003010; // type:func   boot main calls it with 1
+__osViSwapContext = 0x80003080; // type:func
+__osViInit = 0x800031C0; // type:func
+__osViGetCurrentContext = 0x80011460; // type:func
+osViSetXScale = 0x80011550; // type:func   float scale -> +0x18, state |= 2
+osViSwapBuffer = 0x800116E0; // type:func   framebuffer -> +0x4, state |= 0x10
+osViSetSpecialFeatures = 0x80011A40; // type:func
+__osDisableInt = 0x80002DC0; // type:func
+__osRestoreInt = 0x80002DE0; // type:func
+__osGetFpcCsr = 0x80011C00; // type:func
+__osSetFpcCsr = 0x80002BC0; // type:func
+// hardware-register users the game calls (MI / AI)
+osSetIntMask = 0x80002B20; // type:func   MI_INTR_MASK 0xA430000C
+osAiGetStatus = 0x80010A40; // type:func   lw AI_STATUS 0xA450000C
+osAiSetNextBuffer = 0x80010A50; // type:func
+osAiGetLength = 0x80010B30; // type:func   lw AI_LEN 0xA4500004
+osContStartReadData = 0x80010690; // type:func   SI access, __osPackReadData, DMA write/read
+osContGetReadData = 0x80010754; // type:func   unpacks __osContPifRam into OSContPad (buttons, stick)
+__osPackReadData = 0x800107FC; // type:func

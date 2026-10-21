@@ -13,4 +13,7 @@ void install_crash_handler();
 void watch_for_hang(const char* what, int seconds);
 void watch_done();
 
+// Sample a (native) thread's instruction pointer and print where it is; handle is a Windows HANDLE.
+void sample_thread(void* thread, const char* what);
+
 }  // namespace thps
