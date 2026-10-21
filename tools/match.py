@@ -49,6 +49,19 @@ def build(src, tmp):
     return o_file
 
 
+def check(o_file):
+    """[(function name, matches?)] for every function in the object, without printing."""
+    import contextlib, io as _io
+    res = []
+    with contextlib.redirect_stdout(_io.StringIO()) as buf:
+        compare(o_file)
+    for line in buf.getvalue().splitlines():
+        m = re.match(r'(MATCH|DIFF)\s+(\w+)', line)
+        if m:
+            res.append((m.group(2), m.group(1) == 'MATCH'))
+    return res
+
+
 def compare(o_file, show=False):
     main = open(MAIN, 'rb').read()
     known = symbol_addrs()
@@ -87,7 +100,7 @@ def compare(o_file, show=False):
         n = len(mine) // 4
         if bad:
             ok_all = False
-            print(f'DIFF  {name}: {n - len(bad)}/{n} instructions agree (first diff at +{bad[0]:#x})')
+            print(f'DIFF {name}: {n - len(bad)}/{n} instructions agree (first diff at +{bad[0]:#x})')
             if show:
                 import rabbitizer
                 for i in range(0, len(mine), 4):

@@ -4,9 +4,9 @@ name = "thps64"
 repo = "andrewnakas/thps64"  # not created yet; private when it is
 default_branch = "main"
 unit_kind = "address"
-# a function is "done" when its splat asm file is deleted and C takes its place
-unit_paths = ["asm/nonmatchings/**"]
-unit_regex = 'func_([0-9A-F]{8})\.s$'
+# one C file per function: src/funcs/func_XXXXXXXX.c (claims and progress stay per address)
+unit_paths = ["src/funcs/**"]
+unit_regex = 'func_([0-9A-F]{8})\.c$'
 function_table = "config/functions.csv"
 
 [policy]
@@ -18,12 +18,12 @@ maintainers = ["andrewnakas"]
 protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "CODEOWNERS"]
 required_checkboxes = ["No game files", "Provenance is honest"]
 
-# Oracle: rebuild main.bin with KMC GCC 2.7.2 and compare per function (objdiff report);
-# the build runs in CI against the contributor's own baserom secret-free path. TBD once the compiler is in.
+# Oracle: KMC GCC 2.7.2 + gas 2.6 compile every src/funcs file and compare it with the unpacked game code.
+# Needs the owner's ROM, so it runs on the judge box (owner's PC), never on GitHub runners.
 [[gates]]
 name = "match"
-run = "artifact:match"
-where = "public"
+run = "python tools/gate.py"
+where = "judge"
 
 [models]
 backend = "claude-code"
