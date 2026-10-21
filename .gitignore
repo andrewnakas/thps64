@@ -1,0 +1,6 @@
+# never commit game data or anything derived from it
+*.z64
+*.n64
+*.v64
+work/
+baserom*
