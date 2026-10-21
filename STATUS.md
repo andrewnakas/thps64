@@ -29,12 +29,20 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   Near misses noted: func_800246EC (load placed before jr, nop in slot -> maybe different -O or source shape),
   func_8002EA7C (v0/v1 allocation order).
 
+## libultra (2026-10-21)
+- libultra lives in **boot** (0x80000400-0x80012F10) and was built with **IDO** (Nintendo's libultra.a); main is all game
+  code (GCC). `tools/ultralib_scan.py` compiles decompals/ultralib and byte-matches: best fit 2.0I (or older) with IDO 5.3
+  -O1 -> 65 boot functions named in `config/boot_symbols.txt`. ULTRA_CC=ido uses ido-static-recomp 5.3 (Windows).
+- Windows IDO 5.3 trap: cfe fails ("Unexpected End-of-file") on preprocessed input over ~32 KB; the scanner squeezes
+  whitespace, but 64 ultralib files are still too big -> those functions are not named yet. Also no quoted -D values,
+  and no drive-letter paths (run cc.exe in the source dir).
+
 ## Blocked on the owner
 - GitHub repo for this project (private) + Steward App install: after the passkey step.
 
 ## Next
 1. Make `match` the Steward gate (artifact: per-function MATCH lines) and wire `steward.toml`.
 2. Full build: assemble splat asm with a modern assembler (zig clang -target mips) + link -> byte-exact main.bin.
-3. Identify libultra functions in main (signatures) -> names in symbol_addrs.txt; needed by N64Recomp's runtime.
+3. Name the rest of boot (big ultralib files, audio) -> N64Recomp's runtime needs every libultra entry point.
 4. Recomp: N64Recomp (source in n64cleanrecomp/external/pilotwings-64-recomp/lib/N64ModernRuntime/N64Recomp),
    symbol-file mode over a ROM with main.bin stored raw; boot's own unpack then just writes data.
