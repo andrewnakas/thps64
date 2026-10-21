@@ -38,14 +38,21 @@ def symbol_addrs():
     return out
 
 
+class CompileError(Exception):
+    pass
+
+
 def build(src, tmp):
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
-    subprocess.run([ZIG, 'cc', '-E', '-P', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
+    subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
                     '-I', os.path.join(ROOT, 'include'), '-I', os.path.join(ROOT, 'src'),
                     '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], check=True)
-    subprocess.run([f'{TOOLS}/cc1.exe', *CFLAGS, i_file, '-o', s_file], check=True)
-    subprocess.run([f'{TOOLS}/mips-as.exe', '-EB', '-mips3', '-G0', s_file, '-o', o_file], check=True, cwd=tmp)
+    for cmd, cwd in (([f'{TOOLS}/cc1.exe', *CFLAGS, i_file, '-o', s_file], None),
+                     ([f'{TOOLS}/mips-as.exe', '-EB', '-mips3', '-G0', s_file, '-o', o_file], tmp)):
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
+        if r.returncode:
+            raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())
     return o_file
 
 
@@ -116,7 +123,12 @@ def main():
     src = sys.argv[1]
     show = '--show' in sys.argv
     with tempfile.TemporaryDirectory() as tmp:
-        ok = compare(build(src, tmp), show)
+        try:
+            ok = compare(build(src, tmp), show)
+        except (CompileError, subprocess.CalledProcessError) as e:
+            print(f'COMPILE ERROR in {os.path.basename(src)}:')
+            print(str(e)[-3000:])
+            ok = False
     for f in glob.glob(os.path.join(ROOT, 'astemp_*')):
         os.remove(f)
     sys.exit(0 if ok else 1)

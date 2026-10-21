@@ -18,7 +18,7 @@ options:
   create_undefined_syms_auto: True
   o_as_suffix: True
   use_legacy_include_asm: False
-  mips_abi_float_regs: o32
+  mips_abi_float_regs: numeric
   asm_function_macro: glabel
   asm_jtbl_label_macro: jlabel
   asm_data_macro: dlabel
@@ -34,6 +34,6 @@ segments:
     bss_size: 0x6465
     subsegments:
       - [0x0, rodata]
-      - [0xB900, asm]
+      - [0xB900, c, game]
       - [0xAA360, data]
   - [0xDF9A0]

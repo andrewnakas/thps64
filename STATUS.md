@@ -73,6 +73,16 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   native stack walk of stalled threads, per-function argument logging.
 - Next for the port: audio (RSP audio microcode at 0x80097C40 is reported complete, so silent); visual check.
 
+## Decomp tooling (2026-10-21)
+- splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat
+  writes into src/game.c, generated/ignored). FPU regs numeric (LLVM).
+- `tools/build.py`: **full build byte-identical to the game** (C from src/funcs via KMC GCC 2.7.2 + gas 2.6, rest asm
+  via zig's LLVM assembler, ld.lld, per-function placement). Handles: COP2 as raw words, gas 16-byte .text padding
+  trimmed, undefined label/addr symbols defined from their names (two-pass link), uncovered pool words, empty funcs.
+  Second Steward gate ("build"), runs in ~2-3 min.
+- `tools/new_func.py func_X`: m2c draft into src/funcs + match attempt. `tools/match.py`: readable compile errors.
+- `tools/progress.py [--json]`: matched functions/bytes. m2c + decomp-permuter cloned in E:/thps64-tools.
+
 ## Blocked on the owner
 - GitHub repo for this project (private) + Steward App install: after the passkey step.
 

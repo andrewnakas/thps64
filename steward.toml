@@ -25,6 +25,12 @@ name = "match"
 run = "python tools/gate.py"
 where = "judge"
 
+# Whole-binary zero-loss: rebuild the main segment from C + asm and require it byte-identical to the game.
+[[gates]]
+name = "build"
+run = "python tools/build.py"
+where = "judge"
+
 [models]
 backend = "claude-code"
 triage = "claude-haiku-5-5"
