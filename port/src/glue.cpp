@@ -232,7 +232,8 @@ extern "C" void thps_trace(const char* name, void* vctx) {
     t_slot->last.store(name, std::memory_order_relaxed);
     // THPS_TRACE_FN=<name>: log the first calls' arguments of one function
     static const char* watch_fn = std::getenv("THPS_TRACE_FN");
-    if (watch_fn != nullptr && std::strcmp(name, watch_fn) == 0) {
+    static const std::string watch_list = watch_fn ? std::string(",") + watch_fn + "," : std::string();
+    if (watch_fn != nullptr && *watch_fn && watch_list.find(std::string(",") + name + ",") != std::string::npos) {
         static std::atomic<int> logged{ 0 };
         if (logged.fetch_add(1) < 5000) {
             const recomp_context* c = static_cast<const recomp_context*>(vctx);
@@ -255,4 +256,20 @@ extern "C" void thps_osSendMesg(uint8_t* rdram, recomp_context* ctx) {
     thps_set_waiting(static_cast<uint32_t>(ctx->r4) | 1u);
     osSendMesg_recomp(rdram, ctx);
     thps_set_waiting(0);
+}
+
+// ---- AI: osAiGetStatus with a real FIFO-full bit ----------------------------------------------------------------
+// The runtime's osAiGetStatus always says idle, so THPS (which loops `while (osAiGetStatus() < 0)` before queueing
+// the next buffer) never throttles and builds up seconds of audio latency. Report AI_STATUS_FIFO_FULL while more
+// than about two buffers are queued, sleeping 1 ms each time so the device drains in real time.
+#include "thps/callbacks.h"
+extern "C" void thps_osAiGetStatus(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    constexpr size_t kFullFrames = 3000;   // ~2 of THPS's ~1400-frame buffers at 22050 Hz
+    if (thps::audio_frames_queued() > kFullFrames) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        ctx->r2 = static_cast<gpr>(static_cast<int32_t>(0xC0000000u));   // FIFO full | busy
+        return;
+    }
+    ctx->r2 = 0;
 }

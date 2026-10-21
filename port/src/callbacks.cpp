@@ -59,6 +59,7 @@
 // fail to resolve; with extern "C" it would get a different mangled name. Both
 // produce the same undefined symbol at link time and neither is obvious.
 RspExitReason aspMain_run(uint8_t* rdram, uint32_t ucode_addr);
+RspExitReason naudio_hle_run(uint8_t* rdram, uint32_t ucode_addr);   // src/audio_naudio_hle.cpp
 
 namespace {
 
@@ -411,7 +412,8 @@ std::atomic<int> g_audio_volume{ 100 };
 // separate from the state so that turning it off restores sound immediately
 // rather than at the next focus change.
 std::atomic<bool> g_window_focused{ true };
-std::atomic<bool> g_mute_unfocused{ true };
+// THPS: off unless THPS_MUTE_UNFOCUSED=1 (test runs are never focused, and the dump would be silence).
+std::atomic<bool> g_mute_unfocused{ [] { const char* e = std::getenv("THPS_MUTE_UNFOCUSED"); return e != nullptr && *e == '1'; }() };
 
 // The N64 mixes 16-bit stereo, and the game's own sample rate is whatever it
 // asks for through set_frequency.
@@ -992,7 +994,8 @@ RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
                 if (hist[i]) std::fprintf(stderr, " %02X:%d", i, hist[i]);
             }
             std::fprintf(stderr, "\n");
-            if (n_tasks == 600) {   // one full list, with how much of each LOADBUFF source is non-zero
+            static const uint64_t dump_at = [] { const char* e = std::getenv("THPS_AUDIO_DUMP_TASK"); return e ? std::strtoull(e, nullptr, 0) : 600ull; }();
+            if (n_tasks == dump_at) {   // one full list, with how much of each LOADBUFF/SAVEBUFF target is non-zero
                 uint8_t* rd = thps::rdram_base();
                 for (uint32_t off = 0; off + 8 <= g_audio_task_size; off += 8) {
                     const uint32_t w0 = *reinterpret_cast<const uint32_t*>(rd + ((g_audio_task_data + off) & 0x00FFFFFFu));
@@ -1006,9 +1009,21 @@ RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
                     }
                     std::fprintf(stderr, "[thps]   cmd %08X %08X%s", w0, w1, nonzero >= 0 ? "" : "\n");
                     if (nonzero >= 0) std::fprintf(stderr, "  (%d/92 nonzero words at source)\n", nonzero);
+                    // ENVMIXER (03) / RESAMPLE (05) / ADPCM (01): show the first words of the state block in w1
+                    const uint32_t op = (w0 >> 24) & 0x3F;
+                    if (op == 0x01 || op == 0x03 || op == 0x05) {
+                        std::fprintf(stderr, "[thps]     state @%06X:", w1 & 0x00FFFFFF);
+                        for (uint32_t k = 0; k < 0x30; k += 4) {
+                            std::fprintf(stderr, " %08X", *reinterpret_cast<const uint32_t*>(rd + (((w1 & 0x00FFFFFF) + k) & 0x00FFFFFCu)));
+                        }
+                        std::fprintf(stderr, "\n");
+                    }
                 }
             }
         }
+        // THPS_AUDIO_HLE=1: rsp-hle's naudio interpreter instead of the RSPRecomp'd microcode
+        static const bool hle = std::getenv("THPS_AUDIO_HLE") != nullptr;
+        if (hle) return naudio_hle_run;
         return asp_main_watched;
     }
     static uint64_t others = 0;
@@ -1215,6 +1230,11 @@ void update_gfx(ultramodern::gfx_callbacks_t::gfx_data_t) {
 }  // namespace
 
 namespace thps {
+
+// Frames the device still has queued, in the game's own rate (thps_osAiGetStatus throttles on it).
+size_t audio_frames_queued() {
+    return get_frames_remaining();
+}
 
 float window_aspect() {
     int w = 0;

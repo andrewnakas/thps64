@@ -283,7 +283,10 @@ set(THPS_SOURCES src/main.cpp src/rom.cpp src/crash_handler.cpp)
 # sections.cpp cannot even compile without recomp_overlays.inl.
 if(THPS_WITH_RUNTIME AND THPS_WITH_RECOMPILED)
     list(APPEND THPS_SOURCES src/renderer.cpp src/callbacks.cpp src/sections.cpp src/libultra_stubs.cpp
-                             src/audiodiag.cpp src/resample.cpp src/glue.cpp src/boot.cpp)
+                             src/audiodiag.cpp src/resample.cpp src/glue.cpp src/boot.cpp src/auto_stubs.cpp src/audio_naudio_hle.cpp
+                             third_party/rsp-hle/alist.c third_party/rsp-hle/alist_audio.c
+                             third_party/rsp-hle/alist_naudio.c third_party/rsp-hle/alist_nead.c
+                             third_party/rsp-hle/audio.c third_party/rsp-hle/memory.c third_party/rsp-hle/mp3.c)
 endif()
 
 add_executable(THPS64Recomp ${THPS_SOURCES})
@@ -310,7 +313,8 @@ else()
 endif()
 
 target_include_directories(THPS64Recomp PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/rsp-hle")
 
 # The version, from the one place it is declared. It was previously written out
 # by hand in three places -- project(), the runtime's Version struct and the

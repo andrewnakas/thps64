@@ -10,7 +10,7 @@ options:
   src_path: src_boot
   build_path: build
   ld_script_path: build/thps_boot.ld
-  symbol_addrs_path: [config/boot_symbols.txt]
+  symbol_addrs_path: [config/boot_symbols.txt, config/n64sym_boot.txt]
   undefined_funcs_auto_path: build/boot_undefined_funcs_auto.txt
   undefined_syms_auto_path: build/boot_undefined_syms_auto.txt
   asm_function_macro: glabel

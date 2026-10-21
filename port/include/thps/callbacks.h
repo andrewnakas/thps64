@@ -35,6 +35,7 @@ void shutdown_platform();
 
 // The game window's width over its height, or 4:3 before there is a window.
 float window_aspect();
+size_t audio_frames_queued();
 
 // Defined in src/sections.cpp, which owns the generated section table.
 void register_sections();

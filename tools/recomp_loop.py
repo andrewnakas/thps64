@@ -18,6 +18,10 @@ RD = os.path.join(ROOT, 'recomp')
 def main():
     syms = open(os.path.join(RD, 'thps.syms.toml')).read()
     addr = {m.group(1): int(m.group(2), 16) for m in re.finditer(r'name = "(\w+)", vram = 0x([0-9A-F]{8})', syms)}
+    # stale outputs from a run with more files would keep old symbol names alive
+    import glob
+    for old in glob.glob(os.path.join(RD, 'RecompiledFuncs', 'funcs_*.c')):
+        os.remove(old)
     for it in range(200):
         cfg_p = os.path.join(RD, 'thps.toml')
         cfg = open(cfg_p).read()
@@ -40,7 +44,8 @@ def main():
             print(f'STOP: game function {name} ({a:#x}): {why[:200]}')
             return 1
         # boot libultra internals, and game functions that only poke cop0 (TLB/debug leftovers), become stubs
-        open(cfg_p, 'w').write(cfg.replace('stubs = [' + stubs + ']', 'stubs = [' + stubs + f', "{name}"]'))
+        joined = (stubs.strip() + ', ' if stubs.strip() else '') + f'"{name}"'
+        open(cfg_p, 'w').write(cfg.replace('stubs = [' + stubs + ']', 'stubs = [' + joined + ']'))
         print(f'stubbed {name} {a:#x}: {why[:100]}')
     return 1
 

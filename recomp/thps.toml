@@ -14,6 +14,6 @@ recomp_include = """#include "recomp.h"
 
 [patches]
 # boot's ERZ unpacker (hand-written asm): the recomp runs main from the unpacked image, so it is never needed
-stubs = ["func_80002180", "func_800026C4", "func_80002904", "func_80002AA0", "func_80002BE0", "func_80002C40", "func_800035A0", "func_80007400", "func_80007650", "func_800080F0", "func_8000CAD0", "func_80097D34", "func_800998CC", "func_8009AC5C"]
+stubs = ["func_80097D34", "func_800998CC", "func_8009AC5C"]
 # boot main: replaced by port/src/boot.cpp (unpacks main from the ROM in C++, then enters 0x800C0480)
-ignored = ["func_80000870", "thps_osSetEventMesg", "thps_osPiRawStartDma", "thps_osRecvMesg", "thps_osSendMesg"]
+ignored = ["func_80000870", "thps_osSetEventMesg", "thps_osPiRawStartDma", "thps_osRecvMesg", "thps_osSendMesg", "thps_osAiGetStatus"]

@@ -74,10 +74,20 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 - **Renders correctly** (Windows Graphics Capture, port/capture_wgc.py, no desktop grabs; run.ps1 with THPS_CAPTURE=1
   puts the window off-screen): Controller Pak notice -> copyright -> Activision/Neversoft/EoR logos -> 3D attract demo
   (Tony Hawk in the Warehouse). Scripted input: THPS_PRESS="A@4,START@12".
-- Audio: the game's aspMain (older build) is recompiled by RSPRecomp (recomp/aspMain.thps.toml; command table at data
-  offset 0, entry 0x02B0 = IMEM 0x12B0); every task completes. But output is silent: the lists hold only the effects
-  chain (LOADBUFF/SAVEBUFF ring buffers, MIXER, POLEF, INTERLEAVE), never ADPCM/RESAMPLE/ENVMIXER, i.e. no voice is
-  ever started. Also the game makes audio ~1.7x faster than real time. THPS_AUDIO_OPS=1 / THPS_AUDIO_DUMP=1 to inspect.
+- **Audio works** (2026-10-21): menu music plays through the RSPRecomp'd n_aspMain (recomp/aspMain.thps.toml; data+0x10 =
+  0x0000127C "naudio"; table entry 0x02B0 = IMEM 0x12B0). The long "silence" was the inherited mute-when-unfocused
+  (test windows are never focused): now opt-in, THPS_MUTE_UNFOCUSED=1. The intro itself has no music; MusStartSong
+  (libmus) fires on the front end. Latency fix: port-owned thps_osAiGetStatus reports FIFO-full while >3000 frames
+  are queued (the runtime always said idle, THPS loops on it), queue went 20 s -> ~170 ms.
+  - THPS_AUDIO_HLE=1 switches to mupen64plus-rsp-hle's naudio interpreter (port/third_party/rsp-hle, **GPL-2.0+**,
+    vendored for diagnosis; decide before any release whether to drop it). THPS_AUDIO_OPS/_DUMP/_DUMP_TASK/_STATS.
+- Names: shygoo/n64sym v0.9a (-s -t on a boot+main RAM image) -> config/n64sym.txt (+ n64sym_boot.txt for splat);
+  it corrected 4 of my hand guesses and named 230 more (n_audio, libmus, libc). Game-segment names reach only the
+  recompiler (recomp_syms), never osVoice*/rspboot look-alikes (osVoiceInit at 0x800A78E4 broke file loading).
+  Missing runtime internals get generated no-op stubs (port/src/auto_stubs.cpp).
+- Research digest (2026-10-21): Rush 2 Recompiled (n64sym naming, inflate+load_overlays, virtual Controller Pak in
+  src/pak.cpp against a 32 KB .mpk), VPW64Recomp (widescreen/interpolation, virtual pak + rumble), wpj2-recomp.
+  ModernRuntime osPfs* are NOPACK stubs -> THPS shows "No Controller Pak": next to emulate, Rush 2 style.
 
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat
