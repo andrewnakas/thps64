@@ -1,0 +1,1 @@
+thps_main = 0x800C0480; // type:func

@@ -4,3 +4,6 @@
 *.v64
 work/
 baserom*
+__pycache__/
+asm/
+build/

@@ -1,0 +1,33 @@
+# Decompathon Steward config for the THPS N64 decomp (private pilot).
+[project]
+name = "thps64"
+repo = "andrewnakas/thps64"  # not created yet; private when it is
+default_branch = "main"
+unit_kind = "address"
+# a function is "done" when its splat asm file is deleted and C takes its place
+unit_paths = ["asm/nonmatchings/**"]
+unit_regex = 'func_([0-9A-F]{8})\.s$'
+function_table = "config/functions.csv"
+
+[policy]
+auto_merge = true
+first_timer_needs_human = true
+owner_rule_days = 7
+max_units_per_pr = 20
+maintainers = ["andrewnakas"]
+protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "CODEOWNERS"]
+required_checkboxes = ["No game files", "Provenance is honest"]
+
+# Oracle: rebuild main.bin with KMC GCC 2.7.2 and compare per function (objdiff report);
+# the build runs in CI against the contributor's own baserom secret-free path. TBD once the compiler is in.
+[[gates]]
+name = "match"
+run = "artifact:match"
+where = "public"
+
+[models]
+backend = "claude-code"
+triage = "claude-haiku-5-5"
+review = "claude-sonnet-5-5"
+plan = "claude-opus-5-5"
+mentor = "claude-sonnet-5-5"
