@@ -139,6 +139,33 @@ def trim(funcs, vram, data):
     return out
 
 
+def merge_outside(funcs, vram, data):
+    """If a function branches past its own end, it was over-split: absorb the following function(s)
+    (and any gap) up to the branch target."""
+    import struct
+    funcs = sorted(funcs)
+    changed = True
+    while changed:
+        changed = False
+        for k, (a, sz, n) in enumerate(funcs):
+            o = a - vram
+            far = 0
+            for i in range(sz // 4):
+                t = _branch_target(struct.unpack_from('>I', data, o + 4 * i)[0], i)
+                if t is not None:
+                    far = max(far, 4 * t + 4)
+            if far > sz:
+                end = a + far
+                j = k + 1
+                while j < len(funcs) and funcs[j][0] < end:
+                    end = max(end, funcs[j][0] + funcs[j][1])
+                    j += 1
+                funcs[k:j] = [(a, end - a, n)]
+                changed = True
+                break
+    return funcs
+
+
 def section(name, rom, vram, size, funcs):
     s = [f'[[section]]\nname = "{name}"\nrom = 0x{rom:08X}\nvram = 0x{vram:08X}\nsize = 0x{size:X}\n\nfunctions = [']
     for a, sz, n in funcs:
@@ -164,7 +191,7 @@ def main():
         if m:
             named[int(m.group(2), 16)] = m.group(1)
     boot, main_f = add_jal_targets(boot, 0x80000400, rom[0x1000:0x13A10], named, extra_code=[(0x80016AC0, main_bin)]),         add_jal_targets(main_f, 0x80016AC0, main_bin, named, extra_code=[(0x80000400, rom[0x1000:0x13A10])])
-    main_f = trim(split_leaves(main_f, 0x80016AC0, main_bin), 0x80016AC0, main_bin)
+    main_f = merge_outside(trim(split_leaves(main_f, 0x80016AC0, main_bin), 0x80016AC0, main_bin), 0x80016AC0, main_bin)
     # COP2 (PSX GTE leftovers: the port emulates the GTE in C, e.g. func_80042D1C) cannot be recompiled. In the
     # recompiler's input only, each COP2-family instruction inside a function becomes `break 0x3F2`, so the
     # runtime stops at that exact address if the game ever reaches one. The decomp keeps the real bytes.
