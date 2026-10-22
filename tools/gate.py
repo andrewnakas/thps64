@@ -10,6 +10,7 @@ so by default only files that differ from the base branch are compiled; whenever
 the last full pass (a tools PR merged, a new toolchain), every file is checked again. tools/build.py still
 links the whole game and requires it byte-identical.
 """
+import concurrent.futures
 import contextlib
 import glob
 import hashlib
@@ -53,6 +54,21 @@ def changed_files():
     return {os.path.join(ROOT, *p.split('/')) for p in out if p.endswith('.c')}
 
 
+def check_one(f):
+    """-> (name, [(function, matches?)], compare output, compile error or None). Runs in a worker process."""
+    want = os.path.basename(f)[:-2]
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            o = match.build(f, tmp)
+        except Exception as e:
+            return want, [], '', ' '.join(str(e).split())[:300]
+        res = match.check(o)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            match.compare(o, show=True)
+    return want, res, buf.getvalue(), None
+
+
 def main():
     import fresh
     fresh.ensure()
@@ -63,29 +79,25 @@ def main():
     print(f'checking {"all" if full else "changed"} files: {len(files)} of {len(every)}'
           + ('' if not full or '--all' in sys.argv else ' (shared inputs changed since the last full pass)'))
     good, bad, difflines = 0, [], []
-    for f in files:
-        want = os.path.basename(f)[:-2]
-        if not re.fullmatch(r'func_[0-9A-F]{8}', want):
-            bad.append(f'{want}: file name must be func_XXXXXXXX.c')
+    named = [f for f in files if re.fullmatch(r'func_[0-9A-F]{8}', os.path.basename(f)[:-2])]
+    bad += [f'{os.path.basename(f)[:-2]}: file name must be func_XXXXXXXX.c' for f in files if f not in named]
+    jobs = int(os.environ.get('GATE_JOBS', 0)) or max(1, (os.cpu_count() or 2) - 1)
+    if len(named) > 1 and jobs > 1:   # each file is independent: compile them side by side
+        with concurrent.futures.ProcessPoolExecutor(jobs) as pool:
+            results = list(pool.map(check_one, named))
+    else:
+        results = [check_one(f) for f in named]
+    for want, res, out, err in results:
+        if err is not None:
+            # the compiler's own message, so the author can fix it without running the tools
+            bad.append(f'{want}: does not compile: {err}')
+            print(f'FAIL  {want}: does not compile')
             continue
-        with tempfile.TemporaryDirectory() as tmp:
-            try:
-                o = match.build(f, tmp)
-            except Exception as e:
-                # the compiler's own message, so the author can fix it without running the tools
-                msg = ' '.join(str(e).split())[:300]
-                bad.append(f'{want}: does not compile: {msg}')
-                print(f'FAIL  {want}: does not compile')
-                continue
-            res = match.check(o)
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                match.compare(o, show=True)
         names = {n for n, _ in res}
         if want not in names:
             bad.append(f'{want}: file does not define {want}')
         elif not dict(res)[want]:
-            lines = buf.getvalue().splitlines()
+            lines = out.splitlines()
             why = next((l.split(': ', 1)[1] for l in lines if l.startswith(f'DIFF {want}:')), 'does not match')
             bad.append(f'{want}: {why}')
             # first differing instructions, yours | the game's (Steward shows them in the PR comment)
