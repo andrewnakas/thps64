@@ -142,3 +142,30 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 3. Name the rest of boot (big ultralib files, audio) -> N64Recomp's runtime needs every libultra entry point.
 4. Recomp: N64Recomp (source in n64cleanrecomp/external/pilotwings-64-recomp/lib/N64ModernRuntime/N64Recomp),
    symbol-file mode over a ROM with main.bin stored raw; boot's own unpack then just writes data.
+
+## Float constants block ~300 functions (2026-10-22)
+- The game loads float constants from per-function .rodata literals through `$at` (`lui $at,%hi(D_x); lwc1 $fN,%lo(D_x)($at)`,
+  even 1.0/2.0, duplicated per function); 990 such loads in asm/nonmatchings/game, ~306 files.
+- GCC 2.8.1 (and 2.7.2) emit `li.s $fN,value` (mips_const_double_ok); KMC gas 2.6 expands that to lui/ori/mtc1, never a memory
+  load. An `extern f32 D_x` instead gets split through `$v0` by -msplit-addresses (mips_check_split only skips SYMBOL_REF_FLAG).
+- The game never uses lui $at + mtc1 at all, so the original compiler never emitted li.s (constants forced to memory,
+  as when mips_const_double_ok returns false). Earlier guess: the original assembler put li.s values in .rodata (modern GNU as does that with -G0 for values lui alone can't make; it still
+  uses lui+mtc1 for 1.0, which THPS does not). Next: (1) find the assembler/flag that always uses memory, or rewrite li.s ->
+  .rodata literal + `l.s` before gas; (2) rodata migration: C files own their .rodata and build.py places it at the game's
+  address. Until then skip functions with `lwc1 ...($at)`.
+- Bad splits found while matching: func_8003B95C (3 junk words after jr ra at 0x8003B9F4), func_8003BD38 (1 word at 0x8003BDBC);
+  the C for both matches the real function (work/retry). Needs a re-split.
+- More toolchain gaps found by the matching agents (2026-10-22), each blocks a class of functions:
+  - **Solved (2026-10-22):** loads are never moved into delay slots, other instructions are. gas 2.6 has exactly that
+    rule for -mips1 only (`mips_isa < 2 && INSN_LOAD_MEMORY_DELAY`); -mips1 itself breaks 123 matches (load-delay nops),
+    gas -O00 (no swapping) breaks 3. toolchain/build.sh now patches gas so THPS_AS_NO_LOAD_SWAP=1 (set by match.py)
+    applies just that rule: 0 of 360 matches change, 12 more match. The 5 `.set noreorder` files may not need it now.
+  - (Before the fix) Empty delay slots: the game has `lw ...; jr ra; nop` and `jr/j; nop` where our gas 2.6 (reorder mode) fills the slot.
+    5 files in src/funcs work around it with `__asm__(".set noreorder")`. Suggests the original assembler did not reorder
+    (or GCC filled slots itself) — e.g. func_800261A8, func_800391EC, func_80049E2C, func_800246EC, func_8006A148.
+  - `mflo` then `mult` with a nop between (func_800430F0): gas pads that only without -m4100, other functions need -m4100.
+  - Hazard nop after `mfc1 $a2,$f20` before jal (func_8003A410): our gas inserts it, the game has none.
+  - Loop-invariant %hi register copied into an s-register (36 functions, e.g. func_80033A58): GCC reloads it in the loop.
+  - Register allocation order for args with different live ranges (func_8006EBB0).
+  Together with the float literal pools these point at a different assembler/compiler build than ours; worth a
+  dedicated toolchain session (try GCC's own delay-slot filling + `.set noreorder` output, other KMC/SN builds).
