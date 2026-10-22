@@ -107,8 +107,11 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 - Every store to a global in the game (1017 of 1017) is `lui $vN,%hi(sym); sX ...,%lo(sym)($vN)` with a
   compiler-chosen register; none use `$at`. GCC 2.7.2 + gas never does that (gas expands `sw $4,sym` via `$at`),
   so stores to globals can never match with the current toolchain; only loads and pure code do (the 54 matches).
-- The compiler splits addresses itself: GCC 2.8.1 `-msplit-addresses` (Paper Mario's compiler), EGCS, or SN64.
-  Building pmret/gcc-papermario (GCC 2.8.1) natively with zig into E:/thps64-tools/gcc-2.8.1-pm to test.
+- **Solved: GCC 2.8.1 (pmret/gcc-papermario d97824f) `-O1 -msplit-addresses` + gas 2.6 `-m4100`.** Built natively
+  with zig (toolchain/build.sh). It matches all 74 earlier matches plus the stores; -O1 was pinned by hand-matching
+  func_8005E6B4 (0x80 bytes, two divides: -O2 gets 11/33). `-m4100` tells gas the CPU interlocks HI/LO, so it stops
+  padding mflo with nops (the game has none). tools/match.py uses this toolchain (THPS_CC1 overrides the path).
+- README/AGENTS.md: the compiler line is now settled; functions that write globals can match.
 
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat

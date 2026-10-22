@@ -24,7 +24,12 @@ TOOLS = os.environ.get('THPS_TOOLS', 'E:/thps64-tools/bin')
 MAIN = os.path.join(ROOT, 'work', 'main.bin')
 ZIG = os.environ.get('ZIG', 'C:/Users/andre/.local/zig-x86_64-windows-0.16.0/zig.exe')
 MAIN_VRAM = 0x80016AC0
-CFLAGS = ['-quiet', '-O2', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin']
+# GCC 2.8.1 (pmret/gcc-papermario) -O1 -msplit-addresses: the game loads every global address through a
+# compiler-chosen register (1017/1017 stores), which GCC 2.7.2 never does; -O1 pinned on func_8005E6B4 (2026-10-21).
+CC1 = os.environ.get('THPS_CC1', 'E:/thps64-tools/gcc-2.8.1-pm/cc1.exe')
+CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses']
+# the VR4300 interlocks HI/LO: -m4100 stops gas 2.6 padding mflo/mfhi hazards with nops (the game has none)
+ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -48,8 +53,8 @@ def build(src, tmp):
     subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
                     '-I', os.path.join(ROOT, 'include'), '-I', os.path.join(ROOT, 'src'),
                     '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], check=True)
-    for cmd, cwd in (([f'{TOOLS}/cc1.exe', *CFLAGS, i_file, '-o', s_file], None),
-                     ([f'{TOOLS}/mips-as.exe', '-EB', '-mips3', '-G0', s_file, '-o', o_file], tmp)):
+    for cmd, cwd in (([CC1, *CFLAGS, i_file, '-o', s_file], None),
+                     ([f'{TOOLS}/mips-as.exe', *ASFLAGS, s_file, '-o', o_file], tmp)):
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
         if r.returncode:
             raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())

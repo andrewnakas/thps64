@@ -1,13 +1,16 @@
 #!/bin/sh
 # Build the THPS64 matching toolchain natively on Windows (Git Bash + zig), no WSL/MSYS2:
-#   KMC-style GCC 2.7.2 cc1 (decompals/mips-gcc-2.7.2) and KMC gas 2.6 (decompals/mips-binutils-2.6).
-#   sh toolchain/build.sh [WORKDIR]      (default E:/thps64-tools) -> WORKDIR/bin/{cc1.exe,mips-as.exe}
+#   GCC 2.8.1 cc1 (pmret/gcc-papermario; the project compiler, used with -O1 -msplit-addresses) and KMC gas 2.6
+#   (decompals/mips-binutils-2.6). The older GCC 2.7.2 cc1 (decompals/mips-gcc-2.7.2) is built too, for reference.
+#   sh toolchain/build.sh [WORKDIR]      (default E:/thps64-tools) -> WORKDIR/bin/{cc1.exe,mips-as.exe},
+#                                                                    WORKDIR/gcc-2.8.1-pm/cc1.exe
 # zig cc targets 32-bit MinGW (the old sources assume a 32-bit host). Patches only touch temp files and
 # text/binary mode; compat/ supplies the POSIX bits MinGW lacks. Preprocessing uses zig's clang (cccp crashes).
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 W=${1:-/e/thps64-tools}
 GCC_REV=43d1cdb67ed135879869b5266f01efaaada5e35a
+GCC281_REV=d97824ffc7517675646960442b3f512a473e4404
 BU_REV=54514ded39ceb32165a125ddba04ca5b551773a2
 mkdir -p "$W/bin" "$W/compat/sys"
 cp "$HERE/cc32" "$W/bin/cc32"; chmod +x "$W/bin/cc32"
@@ -42,4 +45,10 @@ make -C opcodes CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true >> ../bu-make.log
 make -C libiberty CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true >> ../bu-make.log
 make -C gas CC="$CC" CFLAGS="-O1 -Duint=unsigned" AR="$AR" RANLIB=true LOADLIBES="$W/compat/posix.o" >> ../bu-make.log
 cp gas/as.new "$W/bin/mips-as.exe"
-echo "toolchain ready: $W/bin/cc1.exe $W/bin/mips-as.exe"
+cd "$W"
+[ -d gcc-2.8.1-pm ] || git -c core.autocrlf=false clone -q https://github.com/pmret/gcc-papermario gcc-2.8.1-pm
+cd gcc-2.8.1-pm && git -c safe.directory='*' checkout -q $GCC281_REV
+CC="$CC" ./configure --target=mips-nintendo-nu64 --prefix=/opt/cross --with-gnu-as --disable-gprof --disable-gdb   --disable-werror --host=i386-pc-linux --build=i386-pc-linux > ../gcc281-configure.log
+touch c-parse.c
+make CC="$CC" HOST_CC="$CC" CFLAGS=-O1 CLIB="$W/compat/compat.o" cc1 > ../gcc281-make.log
+echo "toolchain ready: $W/gcc-2.8.1-pm/cc1.exe (project compiler), $W/bin/mips-as.exe, $W/bin/cc1.exe (GCC 2.7.2)"

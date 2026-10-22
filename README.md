@@ -53,9 +53,8 @@ Everything below was worked out from the ROM itself (see [STATUS.md](STATUS.md) 
 - **The compiler.** The game code was built with a late-1990s GCC. We started with KMC GCC 2.7.2, which
   reproduces pure code and loads from globals. But every one of the game's 1,017 *stores* to globals loads the
   address through a compiler-chosen register (`lui $v0,%hi(x); sw $a0,%lo(x)($v0)`), which GCC 2.7.2 never does.
-  **GCC 2.8.1 with `-msplit-addresses`** (Paper Mario's compiler) reproduces both and is becoming the project
-  compiler; its exact optimisation flags are still being pinned down. Until the switch, the gates use the 2.7.2
-  setup below.
+  **GCC 2.8.1 with `-O1 -msplit-addresses`** (Paper Mario's compiler) reproduces both, assembled by gas 2.6 with
+  `-m4100` (the N64's CPU needs no padding after `mflo`). That is the project toolchain.
 - **splat** splits *main* into one assembly file per function (`asm/nonmatchings/game/`, generated locally).
   `tools/find_funcs.py` seeds the function starts (jal targets, prologues after returns, vtable entries,
   varargs preambles that sit before the stack setup).
@@ -75,12 +74,12 @@ Plus [m2c](https://github.com/matt-kempster/m2c) (clone it; set `M2C=path/to/m2c
 `E:/thps64-tools/m2c`).
 
 ### 2. The compiler and assembler
-`toolchain/build.sh` builds KMC-style GCC 2.7.2 (`cc1`) and gas 2.6 natively, with [zig](https://ziglang.org/)
-as the host C compiler (no MSYS2/WSL):
+`toolchain/build.sh` builds GCC 2.8.1 (`cc1`, the project compiler) and gas 2.6 natively, with
+[zig](https://ziglang.org/) as the host C compiler (no MSYS2/WSL):
 ```
-sh toolchain/build.sh E:/thps64-tools        # -> E:/thps64-tools/bin/{cc1.exe,mips-as.exe}
+sh toolchain/build.sh E:/thps64-tools   # -> E:/thps64-tools/gcc-2.8.1-pm/cc1.exe, E:/thps64-tools/bin/mips-as.exe
 ```
-Point the tools at them with `THPS_TOOLS` (default `E:/thps64-tools/bin`) and `ZIG` (path to zig.exe). zig is also
+Point the tools at them with `THPS_CC1` (the GCC 2.8.1 cc1), `THPS_TOOLS` (folder with mips-as.exe) and `ZIG`. zig is also
 the assembler and linker for the full build.
 
 ### 3. Build the inputs from your ROM
