@@ -8,6 +8,7 @@ at an `addiu sp, sp, -N` prologue (function pointers: state tables, callbacks).
 import os
 import re
 import struct
+import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VRAM = 0x80016AC0
@@ -85,6 +86,13 @@ def main():
         return len(gap) >= 4 and any(gap) and all(rabbitizer.Instruction(g).isValid() for g in gap)
     after = {a for a in after if a in jal or not falls_into(a)}
     jal |= after
+    # leaf functions (no stack frame) after a return, reached only through pointers: split them off the way
+    # recomp_syms does (a `jr $ra` no earlier branch jumps past, then code that ends in a return)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import recomp_syms
+    starts = sorted(a for a in jal | ptr if lo <= a < hi)
+    funcs = [(a, b - a, f'func_{a:08X}') for a, b in zip(starts, starts[1:] + [hi])]
+    jal |= {a for a, _, _ in recomp_syms.split_leaves(funcs, VRAM, d)} - set(starts)
     p = os.path.join(ROOT, 'config', 'symbol_addrs.txt')
     keep = open(p).read().split(MARK)[0].rstrip('\n')
     hand = {int(m.group(1), 16) for m in re.finditer(r'=\s*(0x[0-9A-Fa-f]+)', keep)}

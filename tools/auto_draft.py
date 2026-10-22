@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bulk first pass: m2c-draft the smallest unmatched functions and keep only drafts that match as-is.
 
-  python tools/auto_draft.py [N=50] [--max-size 0x40]
+  python tools/auto_draft.py [N=50] [--max-size 0x40] [--range 0xLO-0xHI]
 Drafts are compiled in work/drafts/; a matching one moves to src/funcs/. Prints one summary line.
 """
 import csv
@@ -18,13 +18,15 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     n = int(args[0]) if args else 50
     max_size = int(sys.argv[sys.argv.index('--max-size') + 1], 0) if '--max-size' in sys.argv else 0x40
+    lo, hi = (int(x, 0) for x in sys.argv[sys.argv.index('--range') + 1].split('-')) if '--range' in sys.argv else (0, 1 << 32)
     rows = list(csv.DictReader(open(os.path.join(ROOT, 'config', 'functions.csv'))))
     done = {f[:-2] for f in os.listdir(os.path.join(ROOT, 'src', 'funcs'))}
     tried_p = os.path.join(ROOT, 'work', 'drafts', 'tried.txt')
     os.makedirs(os.path.dirname(tried_p), exist_ok=True)
     tried = set(open(tried_p).read().split()) if os.path.exists(tried_p) else set()
     todo = sorted((int(r['size'], 16), r['name']) for r in rows
-                  if r['name'] not in done and r['name'] not in tried and int(r['size'], 16) <= max_size)[:n]
+                  if r['name'] not in done and r['name'] not in tried and int(r['size'], 16) <= max_size
+                  and lo <= int(r['addr'], 16) < hi)[:n]
     kept = []
     for _, name in todo:
         asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', name + '.s')
