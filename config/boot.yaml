@@ -14,6 +14,7 @@ options:
   undefined_funcs_auto_path: build/boot_undefined_funcs_auto.txt
   undefined_syms_auto_path: build/boot_undefined_syms_auto.txt
   asm_function_macro: glabel
+  generate_asm_macros_files: False   # include/macro.inc is ours (no .aent: LLVM rejects it)
   asm_data_macro: dlabel
   gp_value: 0x0
 segments:

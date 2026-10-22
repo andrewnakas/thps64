@@ -11,3 +11,4 @@ asm_boot/
 src_boot/
 recomp/RecompiledFuncs/
 src/game.c
+.isolated/

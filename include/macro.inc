@@ -25,7 +25,7 @@
     .\visibility \label
     .type \label, @function
     \label:
-        .aent \label
+        /* no .aent: LLVM's assembler rejects it and it emits no bytes (splat no longer regenerates this file) */
 .endm
 
 # A label referenced by an error handler table.
