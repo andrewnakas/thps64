@@ -8,4 +8,3 @@ void func_80079750(void) {
         var_v0 -= 1;
     } while (var_v0 != -1);
 }
-
