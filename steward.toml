@@ -15,8 +15,14 @@ first_timer_needs_human = true
 owner_rule_days = 7
 max_units_per_pr = 20
 maintainers = ["andrewnakas"]
-protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "CODEOWNERS"]
-required_checkboxes = ["No game files", "Provenance is honest"]
+protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "PROVENANCE.md", "CODEOWNERS"]
+claim_lapse_days = 7
+claim_warn_days = 5
+# provenance (PROVENANCE.md): every box, exactly one "who made this", agents acknowledge on every PR
+required_checkboxes = ["Own work:", "No leaked material:", "No game data:", "Lawful decompilation:", "Sources listed:"]
+made_by_checkboxes = ["Written by me", "Prepared by an AI agent"]
+agent_marker = "Prepared by an AI agent"
+agent_checkboxes = ["Agent acknowledgement:"]
 
 # Oracle: KMC GCC 2.7.2 + gas 2.6 compile every src/funcs file and compare it with the unpacked game code.
 # Needs the owner's ROM, so it runs on the judge box (owner's PC), never on GitHub runners.
@@ -37,3 +43,15 @@ triage = "claude-haiku-5-5"
 review = "claude-sonnet-5-5"
 plan = "claude-opus-5-5"
 mentor = "claude-sonnet-5-5"
+
+[github]
+app = "decompathon-steward"
+
+[discord]
+guild = "1562612424371081338"
+announce_channel = "1562615219870629999"
+maintainer_channel = "1562615252259184712"
+claims_channel = "1562615213272989706"
+log_channel = "1562615258785259601"
+announcements = "1562615184122716180"
+contributor_role = "1562615070654070835"
