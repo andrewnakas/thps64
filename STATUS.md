@@ -103,6 +103,13 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
     its end into the next (5 in main: two varargs preambles, a div scheduled before the prologue, a mid-split).
     Lesson: check for functions that do not end in jr/j before chasing runtime causes.
 
+## Compiler identification is incomplete (2026-10-21 evening)
+- Every store to a global in the game (1017 of 1017) is `lui $vN,%hi(sym); sX ...,%lo(sym)($vN)` with a
+  compiler-chosen register; none use `$at`. GCC 2.7.2 + gas never does that (gas expands `sw $4,sym` via `$at`),
+  so stores to globals can never match with the current toolchain; only loads and pure code do (the 54 matches).
+- The compiler splits addresses itself: GCC 2.8.1 `-msplit-addresses` (Paper Mario's compiler), EGCS, or SN64.
+  Building pmret/gcc-papermario (GCC 2.8.1) natively with zig into E:/thps64-tools/gcc-2.8.1-pm to test.
+
 ## Decomp tooling (2026-10-21)
 - splat code subsegment is `c` -> one asm file per function in asm/nonmatchings/game (1930 + 88 empty ones splat
   writes into src/game.c, generated/ignored). FPU regs numeric (LLVM).
