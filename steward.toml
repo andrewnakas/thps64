@@ -1,7 +1,7 @@
 # Decompathon Steward config for the THPS N64 decomp (private pilot).
 [project]
 name = "thps64"
-repo = "andrewnakas/thps64"  # not created yet; private when it is
+repo = "andrewnakas/thps64"  # private
 default_branch = "main"
 unit_kind = "address"
 # one C file per function: src/funcs/func_XXXXXXXX.c (claims and progress stay per address)

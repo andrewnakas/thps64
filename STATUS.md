@@ -117,8 +117,14 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 - `tools/new_func.py func_X`: m2c draft into src/funcs + match attempt. `tools/match.py`: readable compile errors.
 - `tools/progress.py [--json]`: matched functions/bytes. m2c + decomp-permuter cloned in E:/thps64-tools.
 
-## Blocked on the owner
-- GitHub repo for this project (private) + Steward App install: after the passkey step.
+## Steward live (2026-10-21)
+- Private repo github.com/andrewnakas/thps64 (main), Steward App installed (App limited to this repo + the test repo).
+- Judge workspace E:/thps64-judge: a dedicated clone (never work in it); rebuilt from a clean clone with
+  build_main -> split -> gate 24/24 -> build identical. Steward runs where=judge gates there:
+  `python -m steward.daemon --repo andrewnakas/thps64 --app decompathon-steward --judge-workspace E:/thps64-judge [--once] [--no-ai]`
+- End to end: PR #2 (12 functions) judged (match 36/36, build identical) and merged by Steward; PR #3 (deliberately
+  wrong) refused with the differing word in the report. Daemon is not left running for this repo (run it when wanted).
+- 18 more m2c matches wait in work/drafts/pending (max 20 functions per PR).
 
 ## Next
 1. Make `match` the Steward gate (artifact: per-function MATCH lines) and wire `steward.toml`.
