@@ -33,6 +33,11 @@ CC1 = os.environ.get('THPS_CC1', 'E:/thps64-tools/gcc-2.8.1-pm/cc1.exe')
 CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses']
 # the VR4300 interlocks HI/LO: -m4100 stops gas 2.6 padding mflo/mfhi hazards with nops (the game has none)
 ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
+# the game's assembler never moved a load into a branch delay slot (`lw; jr ra; nop`), but did move other
+# instructions (`jr ra; addiu sp`). gas 2.6 does that only for -mips1, which also adds load-delay nops the game
+# lacks; toolchain/build.sh patches gas to apply just the no-load-swap rule when this is set (2026-10-22: 0 of 360
+# matches change, 12 more functions match).
+os.environ['THPS_AS_NO_LOAD_SWAP'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -50,7 +55,14 @@ class CompileError(Exception):
     pass
 
 
+def _check_gas():
+    exe = f'{TOOLS}/mips-as.exe'
+    if os.path.exists(exe) and b'THPS_AS_NO_LOAD_SWAP' not in open(exe, 'rb').read():
+        raise CompileError(f'{exe} predates the no-load-swap patch: rerun toolchain/build.sh')
+
+
 def build(src, tmp):
+    _check_gas()
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
     r = subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
