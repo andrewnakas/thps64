@@ -22,6 +22,9 @@ from elftools.elf.relocation import RelocationSection
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.environ.get('THPS_TOOLS', 'E:/thps64-tools/bin')
 MAIN = os.path.join(ROOT, 'work', 'main.bin')
+# a zig cache per workspace: the judge and a contributor's checkout must never share (or clear) each other's entries
+os.environ.setdefault('ZIG_GLOBAL_CACHE_DIR', os.path.join(ROOT, 'build', 'zig-cache'))
+os.environ.setdefault('ZIG_LOCAL_CACHE_DIR', os.path.join(ROOT, 'build', 'zig-cache'))
 ZIG = os.environ.get('ZIG', 'C:/Users/andre/.local/zig-x86_64-windows-0.16.0/zig.exe')
 MAIN_VRAM = 0x80016AC0
 # GCC 2.8.1 (pmret/gcc-papermario) -O1 -msplit-addresses: the game loads every global address through a
@@ -50,9 +53,11 @@ class CompileError(Exception):
 def build(src, tmp):
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
-    subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
+    r = subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
                     '-I', os.path.join(ROOT, 'include'), '-I', os.path.join(ROOT, 'src'),
-                    '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], check=True)
+                    '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], capture_output=True, text=True)
+    if r.returncode:   # the preprocessor's own message (missing include, bad #define), not a command dump
+        raise CompileError((r.stderr or r.stdout).replace(src, os.path.basename(src)).strip())
     for cmd, cwd in (([CC1, *CFLAGS, i_file, '-o', s_file], None),
                      ([f'{TOOLS}/mips-as.exe', *ASFLAGS, s_file, '-o', o_file], tmp)):
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
