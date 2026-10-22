@@ -30,7 +30,8 @@ MAIN_VRAM = 0x80016AC0
 # GCC 2.8.1 (pmret/gcc-papermario) -O1 -msplit-addresses: the game loads every global address through a
 # compiler-chosen register (1017/1017 stores), which GCC 2.7.2 never does; -O1 pinned on func_8005E6B4 (2026-10-21).
 CC1 = os.environ.get('THPS_CC1', 'E:/thps64-tools/gcc-2.8.1-pm/cc1.exe')
-CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses']
+# -mno-fix4300: this cc1 defaults to the early-VR4300 workaround (a nop after every mul.s/mul.d); the game has none
+CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses', '-mno-fix4300']
 # the VR4300 interlocks HI/LO: -m4100 stops gas 2.6 padding mflo/mfhi hazards with nops (the game has none)
 ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
 # the game's assembler never moved a load into a branch delay slot (`lw; jr ra; nop`), but did move other
@@ -38,6 +39,9 @@ ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
 # lacks; toolchain/build.sh patches gas to apply just the no-load-swap rule when this is set (2026-10-22: 0 of 360
 # matches change, 12 more functions match).
 os.environ['THPS_AS_NO_LOAD_SWAP'] = '1'
+# and no coprocessor load/move hazard nops (the VR4300 interlocks them; the game has `mtc1; cvt.s.w` and `mfc1 $a3; jal`),
+# keeping the single nop between an FP compare and its branch (also at `.set noreorder`)
+os.environ['THPS_AS_COP_INTERLOCKS'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -55,10 +59,44 @@ class CompileError(Exception):
     pass
 
 
+def float_literals(s_text):
+    """Point GCC's li.s/li.d at the game's own float literals before gas runs.
+
+    The game loads every float constant from .rodata through $at (`lui $at,%hi(D_x); lwc1 $fN,%lo(D_x)($at)`, never
+    lui+mtc1); GCC 2.8.1 emits `li.s $fN,value`, which gas 2.6 builds with lui/ori/mtc1. The k-th li.s/li.d in a
+    function becomes `l.s/l.d $fN,D_x`, D_x being the k-th float literal the game's asm for that function loads,
+    only when the bytes at D_x in main.bin equal the compiled value (so the C must hold the exact constant).
+    gas then emits lui $at + lwc1 and the link resolves D_x like any other game symbol."""
+    main = None
+    out, queue = [], []
+    for line in s_text.split('\n'):
+        m = re.match(r'\s*\.ent\s+(\w+)', line)
+        if m:
+            asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', m.group(1) + '.s')
+            queue = []
+            if os.path.exists(asm):
+                queue = [('d' if op == 'ldc1' else 's', sym) for op, sym in re.findall(
+                    r'\b(lwc1|ldc1)\s+\$f\d+, %lo\((D_[0-9A-F]{8})\)\(\$at\)', open(asm).read())]
+        m = re.match(r'(\s*)li\.([sd])\s+(\$f\d+),\s*(\S+)\s*$', line)
+        if m and queue and queue[0][0] == m.group(2):
+            if main is None:
+                main = open(MAIN, 'rb').read()
+            kind, sym = queue[0]
+            bits = struct.pack('>f' if kind == 's' else '>d', float(m.group(4)))
+            o = int(sym[2:], 16) - MAIN_VRAM
+            if main[o:o + len(bits)] == bits:
+                queue.pop(0)
+                out.append(f'{m.group(1)}l.{kind}\t{m.group(3)},{sym}')
+                continue
+        out.append(line)
+    return '\n'.join(out)
+
+
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
-    if os.path.exists(exe) and b'THPS_AS_NO_LOAD_SWAP' not in open(exe, 'rb').read():
-        raise CompileError(f'{exe} predates the no-load-swap patch: rerun toolchain/build.sh')
+    data = open(exe, 'rb').read() if os.path.exists(exe) else b''
+    if data and not (b'THPS_AS_NO_LOAD_SWAP' in data and b'THPS_AS_COP_INTERLOCKS' in data):
+        raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
 def build(src, tmp):
@@ -72,6 +110,11 @@ def build(src, tmp):
         raise CompileError((r.stderr or r.stdout).replace(src, os.path.basename(src)).strip())
     for cmd, cwd in (([CC1, *CFLAGS, i_file, '-o', s_file], None),
                      ([f'{TOOLS}/mips-as.exe', *ASFLAGS, s_file, '-o', o_file], tmp)):
+        if cmd[0] != CC1:
+            with open(s_file) as f:
+                text = f.read()
+            with open(s_file, 'w') as f:
+                f.write(float_literals(text))
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
         if r.returncode:
             raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())

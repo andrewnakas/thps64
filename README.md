@@ -79,6 +79,10 @@ Plus [m2c](https://github.com/matt-kempster/m2c) (clone it; set `M2C=path/to/m2c
 ```
 sh toolchain/build.sh E:/thps64-tools   # -> E:/thps64-tools/gcc-2.8.1-pm/cc1.exe, E:/thps64-tools/bin/mips-as.exe
 ```
+The build patches gas with two opt-in rules the game's original assembler followed (`toolchain/gas_patch.py`: no load
+moved into a delay slot, no coprocessor hazard nops); `tools/match.py` turns them on and refuses an unpatched gas.
+**If you built the tools before 2026-10-22, run `toolchain/build.sh` again.**
+
 Point the tools at them with `THPS_CC1` (the GCC 2.8.1 cc1), `THPS_TOOLS` (folder with mips-as.exe) and `ZIG`. zig is also
 the assembler and linker for the full build.
 
