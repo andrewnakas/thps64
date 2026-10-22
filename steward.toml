@@ -15,8 +15,14 @@ first_timer_needs_human = true
 owner_rule_days = 7
 max_units_per_pr = 20
 maintainers = ["andrewnakas"]
-protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "CODEOWNERS"]
-required_checkboxes = ["No game files", "Provenance is honest"]
+protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "PROVENANCE.md", "CODEOWNERS"]
+claim_lapse_days = 7
+claim_warn_days = 5
+# provenance (PROVENANCE.md): every box, exactly one "who made this", agents acknowledge on every PR
+required_checkboxes = ["Own work:", "No leaked material:", "No game data:", "Lawful decompilation:", "Sources listed:"]
+made_by_checkboxes = ["Written by me", "Prepared by an AI agent"]
+agent_marker = "Prepared by an AI agent"
+agent_checkboxes = ["Agent acknowledgement:"]
 
 # Oracle: KMC GCC 2.7.2 + gas 2.6 compile every src/funcs file and compare it with the unpacked game code.
 # Needs the owner's ROM, so it runs on the judge box (owner's PC), never on GitHub runners.
