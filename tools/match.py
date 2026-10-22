@@ -69,6 +69,14 @@ def check(o_file):
     return res
 
 
+def unit_sizes():
+    import csv
+    p = os.path.join(ROOT, 'config', 'functions.csv')
+    if not os.path.exists(p):
+        return {}
+    return {int(r['addr'], 16): int(r['size'], 16) for r in csv.DictReader(open(p))}
+
+
 def compare(o_file, show=False):
     main = open(MAIN, 'rb').read()
     known = symbol_addrs()
@@ -105,6 +113,15 @@ def compare(o_file, show=False):
             if (a & mk) != (b & mk):
                 bad.append(i)
         n = len(mine) // 4
+        # the C must cover the whole unit: splat sometimes keeps two functions in one asm file, and matching only the
+        # first leaves the rest unbuilt (the build gate then sees zeros). Trailing alignment nops count as covered.
+        want = unit_sizes().get(addr)
+        rest = main[addr - MAIN_VRAM + len(mine):addr - MAIN_VRAM + want] if want else b''
+        if not bad and want and len(mine) < want and any(rest):
+            ok_all = False
+            print(f'DIFF {name}: matches its first {len(mine):#x} bytes, but the unit is {want:#x} bytes '
+                  f'(more code follows at 0x{addr + len(mine):08X}: decompile it too, or split the unit)')
+            continue
         if bad:
             ok_all = False
             print(f'DIFF {name}: {n - len(bad)}/{n} instructions agree (first diff at +{bad[0]:#x})')
