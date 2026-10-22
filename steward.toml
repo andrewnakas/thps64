@@ -37,3 +37,15 @@ triage = "claude-haiku-5-5"
 review = "claude-sonnet-5-5"
 plan = "claude-opus-5-5"
 mentor = "claude-sonnet-5-5"
+
+[github]
+app = "decompathon-steward"
+
+[discord]
+guild = "1562612424371081338"
+announce_channel = "1562615219870629999"
+maintainer_channel = "1562615252259184712"
+claims_channel = "1562615213272989706"
+log_channel = "1562615258785259601"
+announcements = "1562615184122716180"
+contributor_role = "1562615070654070835"
