@@ -22,6 +22,8 @@ ROOT = match.ROOT
 
 
 def main():
+    import fresh
+    fresh.ensure()
     files = sorted(glob.glob(os.path.join(ROOT, 'src', 'funcs', 'func_*.c')))
     good, bad, difflines = 0, [], []
     for f in files:

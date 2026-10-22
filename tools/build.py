@@ -118,6 +118,8 @@ def trim_text(obj, size):
 
 
 def main():
+    import fresh
+    fresh.ensure()
     jobs = int(sys.argv[sys.argv.index('-j') + 1]) if '-j' in sys.argv else 6
     os.makedirs(OBJ, exist_ok=True)
     funcs = func_list()
@@ -146,6 +148,10 @@ def main():
         print(f'{len(errors)} object(s) failed:')
         for e in errors[:10]:
             print('  ' + e)
+        first = errors[0].split(':', 1)
+        name = os.path.basename(first[0]).split('.')[0]
+        detail = ' '.join(first[1].split())[:160] if len(first) > 1 else ''
+        print(f'BUILD FAIL: {len(errors)} object(s) failed; first: {name}: {detail}')
         sys.exit(1)
 
     rodata = [o for o in data if '.rodata' in o]
