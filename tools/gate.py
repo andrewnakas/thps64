@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Steward "match" gate: every src/funcs/func_XXXXXXXX.c must compile to its function in work/main.bin.
 
-  python tools/gate.py            -> one line per file, then a summary line; exit 0 only if all match
+  python tools/gate.py            -> one line per checked file, then a summary line; exit 0 only if all match
+  python tools/gate.py --all      -> check every file
 A file must define exactly the function its name says (so claims and progress stay per address).
-Re-checking every file on every PR is the zero-loss rule: nothing already matched may break or disappear
-(files tracked on the base branch must still exist).
+Zero-loss rule: nothing already matched may break or disappear (files tracked on the base branch must still
+exist). A function file only depends on itself and the shared inputs (SHARED: tools, headers, config, toolchain),
+so by default only files that differ from the base branch are compiled; whenever the shared inputs differ from
+the last full pass (a tools PR merged, a new toolchain), every file is checked again. tools/build.py still
+links the whole game and requires it byte-identical.
 """
 import contextlib
 import glob
+import hashlib
 import io
 import os
 import re
@@ -19,12 +24,44 @@ sys.path.insert(0, os.path.dirname(__file__))
 import match  # noqa: E402
 
 ROOT = match.ROOT
+SHARED = ['tools', 'include', 'config', 'toolchain']
+FULL_STAMP = os.path.join(ROOT, 'work', 'gate_full.ok')
+
+
+def git(*args):
+    return subprocess.run(['git', '-c', 'safe.directory=*', *args], cwd=ROOT, capture_output=True, text=True)
+
+
+def shared_digest():
+    """Everything a function file's result depends on besides the file itself, incl. the compiler binaries."""
+    h = hashlib.sha256()
+    paths = sorted(p for d in SHARED for p in glob.glob(os.path.join(ROOT, d, '**', '*'), recursive=True)
+                   if os.path.isfile(p) and '__pycache__' not in p)
+    for p in paths + [match.CC1, f'{match.TOOLS}/mips-as.exe', match.MAIN]:
+        if os.path.isfile(p):
+            h.update(os.path.relpath(p, ROOT).encode() + open(p, 'rb').read().replace(b'\r\n', b'\n'))
+    return h.hexdigest()
+
+
+def changed_files():
+    """Function files that differ from the base: the working tree vs HEAD (the judge stages a PR's files
+    uncommitted on top of the base), plus commits since origin/main when that ref exists (a contributor's
+    branch). A superset is harmless: it only costs time."""
+    base = git('merge-base', 'HEAD', 'origin/main').stdout.strip() or 'HEAD'
+    out = set(git('diff', '--name-only', base, '--', 'src/funcs').stdout.split())
+    out |= set(git('ls-files', '--others', '--exclude-standard', 'src/funcs').stdout.split())
+    return {os.path.join(ROOT, *p.split('/')) for p in out if p.endswith('.c')}
 
 
 def main():
     import fresh
     fresh.ensure()
-    files = sorted(glob.glob(os.path.join(ROOT, 'src', 'funcs', 'func_*.c')))
+    every = sorted(glob.glob(os.path.join(ROOT, 'src', 'funcs', 'func_*.c')))
+    digest = shared_digest()
+    full = '--all' in sys.argv or not os.path.exists(FULL_STAMP) or open(FULL_STAMP).read().strip() != digest
+    files = every if full else sorted(f for f in changed_files() if os.path.exists(f))
+    print(f'checking {"all" if full else "changed"} files: {len(files)} of {len(every)}'
+          + ('' if not full or '--all' in sys.argv else ' (shared inputs changed since the last full pass)'))
     good, bad, difflines = 0, [], []
     for f in files:
         want = os.path.basename(f)[:-2]
@@ -69,6 +106,10 @@ def main():
     for b in bad:
         print('PROBLEM ' + b)
     print(f'{good}/{len(files)} files match' + ('' if not bad else f', {len(bad)} problem(s)'))
+    if full and not bad:   # later runs with the same shared inputs only need to check changed files
+        os.makedirs(os.path.dirname(FULL_STAMP), exist_ok=True)
+        with open(FULL_STAMP, 'w') as f:
+            f.write(digest + '\n')
     sys.exit(0 if not bad else 1)
 
 
