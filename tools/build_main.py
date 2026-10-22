@@ -5,7 +5,7 @@ Boot: ROM 0x1000.. -> 0x80000400 (code+data to 0x80012F10, bss to 0x80016AC0).
 Chunk table at ROM 0x13B14: u32 count, then count+1 offsets (relative to 0x13B14).
 Each chunk is ERZ1/ERZ2 or raw, and lands at 0x80016AC0 + i*0x10000. Then boot jumps to 0x800C0480.
 
-  python tools/build_main.py ROM work/   -> work/main.bin (RAM 0x80016AC0..), work/boot.bin, work/layout.txt
+  python tools/build_main.py [ROM [work/]]   (ROM defaults to $THPS_ROM) -> work/main.bin (RAM 0x80016AC0..), work/boot.bin, work/layout.txt
 """
 import os
 import struct
@@ -19,7 +19,8 @@ MAIN_VRAM = 0x80016AC0
 
 
 def main():
-    rom, out = sys.argv[1], sys.argv[2]
+    rom = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('THPS_ROM', "E:/Tony Hawk's Pro Skater (U) (V1.1) [!].z64")
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'work')
     d = open(rom, 'rb').read()
     os.makedirs(out, exist_ok=True)
     n = struct.unpack_from('>I', d, TABLE)[0]

@@ -13,4 +13,13 @@ Maintained with Steward (an automated maintainer: claims, gates, merges); see RU
 - Gates: `python tools/gate.py` (every file matches), `python tools/build.py` (byte-identical rebuild).
 - `port/`: a static recompilation (N64Recomp + N64ModernRuntime) that runs the game natively; useful for tracing.
 
+## Setup from a clean clone
+```
+python tools/build_main.py "path/to/Tony Hawk's Pro Skater (U) (V1.1) [!].z64"   # or set THPS_ROM
+python tools/split.py      # splat -> asm/, config/functions.csv
+python tools/gate.py       # every src/funcs file matches
+python tools/build.py      # byte-identical rebuild
+```
+Toolchain paths: `THPS_TOOLS` (KMC GCC 2.7.2 + gas 2.6, default E:/thps64-tools/bin) and `ZIG`.
+
 Progress: `python tools/progress.py`.
