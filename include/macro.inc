@@ -25,7 +25,7 @@
     .\visibility \label
     .type \label, @function
     \label:
-        .aent \label
+    # LLVM does not support .aent; the symbol still identifies the alternate entry.
 .endm
 
 # A label referenced by an error handler table.
