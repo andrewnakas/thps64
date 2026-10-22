@@ -2,7 +2,7 @@
 
 void func_800394A8(void *, s32);             /* extern */
 void func_80065E8C(void *, void *);        /* extern */
-void func_80088ED4();                            /* extern */
+void func_80088ED4(void *);                            /* extern */
 void func_800A735C(void *, s32);             /* extern */
 void func_800B19C0(void *, s32);             /* extern */
 extern u8 D_8001EFF8[];
@@ -15,7 +15,7 @@ void func_80087C94(void *arg0, s32 arg1) {
 
     (*(void **) ((u8 *) (arg0) + 0x2C)) = D_8001EFF8;
     if ((*(s32 *) ((u8 *) (arg0) + 0x528)) == 0) {
-        func_80088ED4();
+        func_80088ED4(arg0);
     }
     table = D_800DC3F8;
     context = D_800D0FC0;
