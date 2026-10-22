@@ -47,10 +47,20 @@ def shared_digest():
 def changed_files():
     """Function files that differ from the base: the working tree vs HEAD (the judge stages a PR's files
     uncommitted on top of the base), plus commits since origin/main when that ref exists (a contributor's
-    branch). A superset is harmless: it only costs time."""
-    base = git('merge-base', 'HEAD', 'origin/main').stdout.strip() or 'HEAD'
-    out = set(git('diff', '--name-only', base, '--', 'src/funcs').stdout.split())
-    out |= set(git('ls-files', '--others', '--exclude-standard', 'src/funcs').stdout.split())
+    branch). A superset is harmless: it only costs time. -> None if git cannot answer (not a checkout, git
+    missing or failing): the caller then checks every file, so the gate fails closed, never silently empty."""
+    try:
+        if git('rev-parse', '--is-inside-work-tree').stdout.strip() != 'true':
+            return None
+        mb = git('merge-base', 'HEAD', 'origin/main')
+        base = mb.stdout.strip() if mb.returncode == 0 and mb.stdout.strip() else 'HEAD'
+        diff = git('diff', '--name-only', base, '--', 'src/funcs')
+        new = git('ls-files', '--others', '--exclude-standard', 'src/funcs')
+    except OSError:
+        return None
+    if diff.returncode or new.returncode:
+        return None
+    out = set(diff.stdout.split()) | set(new.stdout.split())
     return {os.path.join(ROOT, *p.split('/')) for p in out if p.endswith('.c')}
 
 
@@ -75,9 +85,12 @@ def main():
     every = sorted(glob.glob(os.path.join(ROOT, 'src', 'funcs', 'func_*.c')))
     digest = shared_digest()
     full = '--all' in sys.argv or not os.path.exists(FULL_STAMP) or open(FULL_STAMP).read().strip() != digest
-    files = every if full else sorted(f for f in changed_files() if os.path.exists(f))
-    print(f'checking {"all" if full else "changed"} files: {len(files)} of {len(every)}'
-          + ('' if not full or '--all' in sys.argv else ' (shared inputs changed since the last full pass)'))
+    why = '' if not full or '--all' in sys.argv else ' (shared inputs changed since the last full pass)'
+    changed = None if full else changed_files()
+    if changed is None and not full:   # fail closed: no reliable change list means check everything
+        full, why = True, ' (could not list changed files with git)'
+    files = every if full else sorted(f for f in changed if os.path.exists(f))
+    print(f'checking {"all" if full else "changed"} files: {len(files)} of {len(every)}' + why)
     good, bad, difflines = 0, [], []
     named = [f for f in files if re.fullmatch(r'func_[0-9A-F]{8}', os.path.basename(f)[:-2])]
     bad += [f'{os.path.basename(f)[:-2]}: file name must be func_XXXXXXXX.c' for f in files if f not in named]
