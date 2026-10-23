@@ -56,7 +56,6 @@ void func_800A73EC(void *, s32);                         /* extern */
 void func_800B198C(void *);                            /* extern */
 void func_800B1A80(void *, u16);                       /* extern */
 void func_800B231C(void *, s32, s32, s32, s32);              /* extern */
-#define D_8001F670 (*(const f32 *) 0x8001F670)
 extern u8 D_8001F988[];
 extern s32 D_800C0E20;
 extern u8 D_800D3F34[];
@@ -126,6 +125,7 @@ void *func_80089CC0(void *arg0) {
             func_800B1A80((u8 *) state + 0x38, state->field_0FE);
         }
     } else {
+        /* Two separate tests calling the same thing: one `== 1 || MODE_GROUP` condition compiles differently. */
         if (D_800DE7A0 == 1) {
             func_800B1A80((u8 *) state + 0x38, state->field_0FE);
         } else if (MODE_GROUP_80089CC0(D_800DE7A0)) {
@@ -135,7 +135,7 @@ void *func_80089CC0(void *arg0) {
     state->field_03C = 1;
     func_800B1A80((u8 *) state + 0xD8, 0xCEU);
     state->field_0DC = 1;
-    state->field_0EC = (f32) D_8001F670;
+    state->field_0EC = 0.5f;
     state->field_0F0 = 1;
     func_8008BB2C(buffer, 2);
     return state;
