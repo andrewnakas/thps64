@@ -72,11 +72,26 @@ def check_one(f):
             o = match.build(f, tmp)
         except Exception as e:
             return want, [], '', ' '.join(str(e).split())[:300]
+        own = own_data(o)
+        if own:   # the build links only the game's own data: a function file cannot bring rodata/data with it
+            return want, [], '', OWN + ', '.join(own) + (' (a string literal, a switch jump table or initialized '
+                                                         'data); use the game\'s symbols (extern char D_xxx[])')
         res = match.check(o)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             match.compare(o, show=True)
     return want, res, buf.getvalue(), None
+
+
+OWN = 'has its own '
+
+
+def own_data(o):
+    """Non-empty data sections in a function's object, e.g. ['.rodata (0x100 bytes)']."""
+    from elftools.elf.elffile import ELFFile
+    with open(o, 'rb') as fh:
+        return [f'{s.name} ({s["sh_size"]:#x} bytes)' for s in ELFFile(fh).iter_sections()
+                if s.name.startswith(('.rodata', '.rdata', '.data', '.sdata', '.bss', '.sbss')) and s['sh_size']]
 
 
 def main():
@@ -101,6 +116,10 @@ def main():
     else:
         results = [check_one(f) for f in named]
     for want, res, out, err in results:
+        if err is not None and err.startswith(OWN):
+            bad.append(f'{want}: {err}')
+            print(f'FAIL  {want}: has its own data')
+            continue
         if err is not None:
             # the compiler's own message, so the author can fix it without running the tools
             bad.append(f'{want}: does not compile: {err}')
