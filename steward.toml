@@ -15,6 +15,8 @@ first_timer_needs_human = true
 owner_rule_days = 7
 max_units_per_pr = 20
 maintainers = ["andrewnakas"]
+# one person, two accounts: nakasmakes is the owner's own Codex account (confirmed by the owner 2026-10-23)
+identities = [["andrewnakas", "nakasmakes"]]
 protected_paths = ["tools/**", "config/**", "Makefile", "RULES.md", "PROVENANCE.md", "CODEOWNERS"]
 claim_lapse_days = 7
 claim_warn_days = 5
