@@ -169,3 +169,15 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
   - Register allocation order for args with different live ranges (func_8006EBB0).
   Together with the float literal pools these point at a different assembler/compiler build than ours; worth a
   dedicated toolchain session (try GCC's own delay-slot filling + `.set noreorder` output, other KMC/SN builds).
+
+## Float constants and FPU hazards solved (2026-10-22, tools PR after #33)
+- `tools/match.py float_literals()`: between cc1 and gas, the k-th `li.s/li.d` in a function becomes `l.s/l.d $fN,D_x` where
+  D_x is the k-th float literal the game's own asm for that function loads through $at, only if main.bin holds exactly the
+  compiled bits. gas then emits the game's `lui $at; lwc1` and the link resolves D_x. C keeps plain literals (`1.0f`).
+- `-mno-fix4300`: this cc1 defaults to the early-VR4300 multiply workaround (nop after every mul.s/mul.d; 209 game
+  functions use mul.s/mul.d, none has that nop).
+- gas rule THPS_AS_COP_INTERLOCKS (toolchain/gas_patch.py): no coprocessor load/move hazard nops (`mtc1; cvt.s.w`,
+  `mfc1 $a3; jal`), one nop (not two) between an FP compare and its branch at `.set noreorder`.
+- Measured: 0 of 379 matches change, func_8002A904 + func_80041EC0 match as-is, 7 more float functions matched by hand;
+  full build byte-identical with all of them. C files must not contain string literals (they add .rodata and game text;
+  reference the game's strings as `extern char D_x[]`).

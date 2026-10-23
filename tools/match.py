@@ -30,7 +30,8 @@ MAIN_VRAM = 0x80016AC0
 # GCC 2.8.1 (pmret/gcc-papermario) -O1 -msplit-addresses: the game loads every global address through a
 # compiler-chosen register (1017/1017 stores), which GCC 2.7.2 never does; -O1 pinned on func_8005E6B4 (2026-10-21).
 CC1 = os.environ.get('THPS_CC1', 'E:/thps64-tools/gcc-2.8.1-pm/cc1.exe')
-CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses']
+# -mno-fix4300: this cc1 defaults to the early-VR4300 workaround (a nop after every mul.s/mul.d); the game has none
+CFLAGS = ['-quiet', '-O1', '-mips3', '-mgp32', '-mfp32', '-G0', '-fno-builtin', '-msplit-addresses', '-mno-fix4300']
 # the VR4300 interlocks HI/LO: -m4100 stops gas 2.6 padding mflo/mfhi hazards with nops (the game has none)
 ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
 # the game's assembler never moved a load into a branch delay slot (`lw; jr ra; nop`), but did move other
@@ -38,6 +39,15 @@ ASFLAGS = ['-EB', '-mips3', '-m4100', '-G0']
 # lacks; toolchain/build.sh patches gas to apply just the no-load-swap rule when this is set (2026-10-22: 0 of 360
 # matches change, 12 more functions match).
 os.environ['THPS_AS_NO_LOAD_SWAP'] = '1'
+# and no coprocessor load/move hazard nops (the VR4300 interlocks them; the game has `mtc1; cvt.s.w` and `mfc1 $a3; jal`),
+# keeping the single nop between an FP compare and its branch (also at `.set noreorder`)
+os.environ['THPS_AS_COP_INTERLOCKS'] = '1'
+# stores are never moved into a delay slot either (`sw; jr ra; nop` after block copies; 2026-10-22: 0 of 505 matches
+# change, func_8003A410 and the plain-C func_800790D4 match, func_800669CC 71 -> 154/157 instructions)
+os.environ['THPS_AS_NO_STORE_SWAP'] = '1'
+# and no multiply in a delay slot at all (VR4300 errata): 0 of the game's 2240 mult/multu/mul.s/mul.d sit in one, while
+# other FP ops do (2026-10-23: 0 of 833 matches change; func_8002311C 6 -> 26/29, func_80023190 10 -> 30/33)
+os.environ['THPS_AS_NO_MUL_SWAP'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -55,14 +65,167 @@ class CompileError(Exception):
     pass
 
 
+def float_literals(s_text):
+    """Point GCC's li.s/li.d at the game's own float literals before gas runs.
+
+    The game loads every float constant from .rodata through $at (`lui $at,%hi(D_x); lwc1 $fN,%lo(D_x)($at)`, never
+    lui+mtc1); GCC 2.8.1 emits `li.s $fN,value`, which gas 2.6 builds with lui/ori/mtc1. The k-th li.s/li.d in a
+    function becomes `l.s/l.d $fN,D_x`, D_x being the k-th float literal the game's asm for that function loads,
+    only when the bytes at D_x in main.bin equal the compiled value (so the C must hold the exact constant).
+    gas then emits lui $at + lwc1 and the link resolves D_x like any other game symbol."""
+    main = None
+    out, queue = [], []
+    for line in s_text.split('\n'):
+        m = re.match(r'\s*\.ent\s+(\w+)', line)
+        if m:
+            asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', m.group(1) + '.s')
+            queue = []
+            if os.path.exists(asm):
+                queue = [('d' if op == 'ldc1' else 's', sym) for op, sym in re.findall(
+                    r'\b(lwc1|ldc1)\s+\$f\d+, %lo\((D_[0-9A-F]{8})\)\(\$at\)', open(asm).read())]
+        m = re.match(r'(\s*)li\.([sd])\s+(\$f\d+),\s*(\S+)\s*$', line)
+        if m and queue and queue[0][0] == m.group(2):
+            if main is None:
+                main = open(MAIN, 'rb').read()
+            kind, sym = queue[0]
+            bits = struct.pack('>f' if kind == 's' else '>d', float(m.group(4)))
+            o = int(sym[2:], 16) - MAIN_VRAM
+            if main[o:o + len(bits)] == bits:
+                queue.pop(0)
+                out.append(f'{m.group(1)}l.{kind}\t{m.group(3)},{sym}')
+                continue
+        out.append(line)
+    return '\n'.join(out)
+
+
+def _tables(s_text):
+    """GCC's switch jump tables in a .s file: [(function, label, [target labels])], in order."""
+    out, func, block, cur = [], None, False, None
+    for line in s_text.split('\n'):
+        t = line.strip()
+        m = re.match(r'\.ent\s+(\w+)', t)
+        if m:
+            func = m.group(1)
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+            continue
+        if block and t == '.text':
+            block, cur = False, None
+            continue
+        if block:
+            m = re.match(r'(\.L\w+):$', t)
+            if m:
+                cur = (func, m.group(1), [])
+                out.append(cur)
+            m = re.match(r'\.word\s+(\.L\w+)$', t)
+            if m and cur is not None:
+                cur[2].append(m.group(1))
+    return out
+
+
+def jump_tables(s_text, tmp):
+    """Point GCC's switch jump tables at the game's own (jtbl_XXXXXXXX in .rodata) and drop GCC's copy.
+
+    GCC emits each table into the file's own .rodata, which the build cannot place (the game's tables already sit in
+    the game's rodata). The k-th table in a function becomes the k-th jtbl_ symbol the game's asm for that function
+    uses, but only after checking every entry: the original .s is assembled once and each table word (a label offset
+    within the function) must equal the game's table word minus the function's address. Any mismatch leaves the
+    table in place, so the gate reports the file's own .rodata instead of hiding a wrong case mapping."""
+    tables = _tables(s_text)
+    if not tables:
+        return s_text
+    o_file = os.path.join(tmp, 'jt.o')
+    with open(os.path.join(tmp, 'jt.s'), 'w', newline='\n') as f:
+        f.write(s_text)
+    r = subprocess.run([f'{TOOLS}/mips-as.exe', *ASFLAGS, 'jt.s', '-o', 'jt.o'], capture_output=True, text=True, cwd=tmp)
+    if r.returncode:
+        return s_text   # the real assembly step reports the error
+    with open(o_file, 'rb') as fh:
+        sec = ELFFile(fh).get_section_by_name('.rodata')
+        ours = sec.data() if sec is not None else b''
+    main = open(MAIN, 'rb').read()
+    mapping, pos, used = {}, 0, {}
+    for func, label, targets in tables:
+        asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', f'{func}.s')
+        game = list(dict.fromkeys(re.findall(r'%hi\((jtbl_[0-9A-F]{8})\)', open(asm).read()))) if os.path.exists(asm) else []
+        k = used.get(func, 0)
+        used[func] = k + 1
+        pos = (pos + 3) & ~3
+        words = [struct.unpack('>I', ours[pos + 4 * i:pos + 4 * i + 4])[0] for i in range(len(targets))]
+        pos += 4 * len(targets)
+        if k >= len(game) or not re.fullmatch(r'func_[0-9A-F]{8}', func or ''):
+            return s_text
+        sym, fva = game[k], int(func[5:], 16)
+        o = int(sym[5:], 16) - MAIN_VRAM
+        theirs = [struct.unpack('>I', main[o + 4 * i:o + 4 * i + 4])[0] for i in range(len(targets))]
+        if theirs != [fva + w for w in words]:
+            return s_text
+        mapping[label] = sym
+    # only drop .rodata that holds nothing but these tables (strings or other data stay, and the gate reports them)
+    block = False
+    for line in s_text.split('\n'):
+        t = line.strip()
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+        elif block and t == '.text':
+            block = False
+        elif block and t and not (t.startswith('.align') or re.fullmatch(r'\.word\s+\.L\w+', t)
+                                  or (t.endswith(':') and t[:-1] in mapping)):
+            return s_text
+    out, block = [], False
+    for line in s_text.split('\n'):
+        t = line.strip()
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+            continue
+        if block:
+            if t == '.text':
+                block = False
+            continue
+        for label, sym in mapping.items():
+            line = re.sub(r'(?<![\w.$])' + re.escape(label) + r'(?!\w)', sym, line)
+        out.append(line)
+    return '\n'.join(out)
+
+
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
-    if os.path.exists(exe) and b'THPS_AS_NO_LOAD_SWAP' not in open(exe, 'rb').read():
-        raise CompileError(f'{exe} predates the no-load-swap patch: rerun toolchain/build.sh')
+    data = open(exe, 'rb').read() if os.path.exists(exe) else b''
+    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP')):
+        raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
+
+
+# Per-file optimisation flags: the game was not built with one flag set. Functions next to each other match only at -O1
+# or only with -O2's CSE passes (2026-10-23: 7 given-up functions match with `-O2 -fno-schedule-insns
+# -fno-schedule-insns2`, which breaks 30 of 821 -O1 matches). A file opts in with a first-line comment
+#   /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
+# Only these flags are accepted, so a file cannot change anything else about the compiler.
+# `-Wa,-no-m4100` is for the assembler: such files were assembled without -m4100, so gas pads mflo/mfhi -> mult/div
+# hazards with nops the way the game does in those files (func_80042E78, func_80042F58, func_800673B0 match only so).
+FILE_CFLAGS = {'-O2', '-fno-schedule-insns', '-fno-schedule-insns2', '-fcse-follow-jumps', '-fcse-skip-blocks',
+               '-frerun-cse-after-loop', '-fexpensive-optimizations', '-fno-strength-reduce', '-ffast-math',
+               '-Wa,-no-m4100'}
+
+
+def file_cflags(src):
+    """The extra flags a C file asks for in its first-line `/* cflags: ... */` comment (whitelisted)."""
+    with open(src, encoding='utf-8', errors='replace') as f:
+        first = f.readline()
+    m = re.match(r'\s*/\*\s*cflags:(.*?)\*/', first)
+    if not m:
+        return []
+    flags = m.group(1).split()
+    bad = [x for x in flags if x not in FILE_CFLAGS]
+    if bad:
+        raise CompileError(f'cflags comment: not allowed: {" ".join(bad)} (allowed: {" ".join(sorted(FILE_CFLAGS))})')
+    return flags
 
 
 def build(src, tmp):
     _check_gas()
+    extra = file_cflags(src)
+    asflags = [a for a in ASFLAGS if a != '-m4100'] if '-Wa,-no-m4100' in extra else ASFLAGS
+    extra = [x for x in extra if not x.startswith('-Wa,')]
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
     r = subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
@@ -70,8 +233,13 @@ def build(src, tmp):
                     '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], capture_output=True, text=True)
     if r.returncode:   # the preprocessor's own message (missing include, bad #define), not a command dump
         raise CompileError((r.stderr or r.stdout).replace(src, os.path.basename(src)).strip())
-    for cmd, cwd in (([CC1, *CFLAGS, i_file, '-o', s_file], None),
-                     ([f'{TOOLS}/mips-as.exe', *ASFLAGS, s_file, '-o', o_file], tmp)):
+    for cmd, cwd in (([CC1, *CFLAGS, *extra, i_file, '-o', s_file], None),
+                     ([f'{TOOLS}/mips-as.exe', *asflags, s_file, '-o', o_file], tmp)):
+        if cmd[0] != CC1:
+            with open(s_file) as f:
+                text = f.read()
+            with open(s_file, 'w', newline='\n') as f:
+                f.write(jump_tables(float_literals(text), tmp))
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
         if r.returncode:
             raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())
