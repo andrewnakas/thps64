@@ -192,8 +192,37 @@ def _check_gas():
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
+# Per-file optimisation flags: the game was not built with one flag set. Functions next to each other match only at -O1
+# or only with -O2's CSE passes (2026-10-23: 7 given-up functions match with `-O2 -fno-schedule-insns
+# -fno-schedule-insns2`, which breaks 30 of 821 -O1 matches). A file opts in with a first-line comment
+#   /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
+# Only these flags are accepted, so a file cannot change anything else about the compiler.
+# `-Wa,-no-m4100` is for the assembler: such files were assembled without -m4100, so gas pads mflo/mfhi -> mult/div
+# hazards with nops the way the game does in those files (func_80042E78, func_80042F58, func_800673B0 match only so).
+FILE_CFLAGS = {'-O2', '-fno-schedule-insns', '-fno-schedule-insns2', '-fcse-follow-jumps', '-fcse-skip-blocks',
+               '-frerun-cse-after-loop', '-fexpensive-optimizations', '-fno-strength-reduce', '-ffast-math',
+               '-Wa,-no-m4100'}
+
+
+def file_cflags(src):
+    """The extra flags a C file asks for in its first-line `/* cflags: ... */` comment (whitelisted)."""
+    with open(src, encoding='utf-8', errors='replace') as f:
+        first = f.readline()
+    m = re.match(r'\s*/\*\s*cflags:(.*?)\*/', first)
+    if not m:
+        return []
+    flags = m.group(1).split()
+    bad = [x for x in flags if x not in FILE_CFLAGS]
+    if bad:
+        raise CompileError(f'cflags comment: not allowed: {" ".join(bad)} (allowed: {" ".join(sorted(FILE_CFLAGS))})')
+    return flags
+
+
 def build(src, tmp):
     _check_gas()
+    extra = file_cflags(src)
+    asflags = [a for a in ASFLAGS if a != '-m4100'] if '-Wa,-no-m4100' in extra else ASFLAGS
+    extra = [x for x in extra if not x.startswith('-Wa,')]
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
     r = subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
@@ -201,8 +230,8 @@ def build(src, tmp):
                     '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], capture_output=True, text=True)
     if r.returncode:   # the preprocessor's own message (missing include, bad #define), not a command dump
         raise CompileError((r.stderr or r.stdout).replace(src, os.path.basename(src)).strip())
-    for cmd, cwd in (([CC1, *CFLAGS, i_file, '-o', s_file], None),
-                     ([f'{TOOLS}/mips-as.exe', *ASFLAGS, s_file, '-o', o_file], tmp)):
+    for cmd, cwd in (([CC1, *CFLAGS, *extra, i_file, '-o', s_file], None),
+                     ([f'{TOOLS}/mips-as.exe', *asflags, s_file, '-o', o_file], tmp)):
         if cmd[0] != CC1:
             with open(s_file) as f:
                 text = f.read()
