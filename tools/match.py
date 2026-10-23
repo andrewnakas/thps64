@@ -99,8 +99,9 @@ def float_literals(s_text):
 
 
 def _tables(s_text):
-    """GCC's switch jump tables in a .s file: [(function, label, [target labels])], in order."""
-    out, func, block, cur = [], None, False, None
+    """GCC's switch jump tables in a .s file: [(function, label, [target labels], alignment)], in order. GCC puts
+    `.align 3` (8 bytes) before each table, so a table after one with an odd entry count starts 4 bytes later."""
+    out, func, block, cur, align = [], None, False, None, 4
     for line in s_text.split('\n'):
         t = line.strip()
         m = re.match(r'\.ent\s+(\w+)', t)
@@ -113,10 +114,14 @@ def _tables(s_text):
             block, cur = False, None
             continue
         if block:
+            m = re.match(r'\.align\s+(\d+)$', t)
+            if m:
+                align = max(align, 1 << int(m.group(1)))   # `.align 3` then `.align 2`: still 8
             m = re.match(r'(\.L\w+):$', t)
             if m:
-                cur = (func, m.group(1), [])
+                cur = (func, m.group(1), [], max(align, 4))
                 out.append(cur)
+                align = 4
             m = re.match(r'\.word\s+(\.L\w+)$', t)
             if m and cur is not None:
                 cur[2].append(m.group(1))
@@ -145,12 +150,12 @@ def jump_tables(s_text, tmp):
         ours = sec.data() if sec is not None else b''
     main = open(MAIN, 'rb').read()
     mapping, pos, used = {}, 0, {}
-    for func, label, targets in tables:
+    for func, label, targets, align in tables:
         asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', f'{func}.s')
         game = list(dict.fromkeys(re.findall(r'%hi\((jtbl_[0-9A-F]{8})\)', open(asm).read()))) if os.path.exists(asm) else []
         k = used.get(func, 0)
         used[func] = k + 1
-        pos = (pos + 3) & ~3
+        pos = (pos + align - 1) & ~(align - 1)
         words = [struct.unpack('>I', ours[pos + 4 * i:pos + 4 * i + 4])[0] for i in range(len(targets))]
         pos += 4 * len(targets)
         if k >= len(game) or not re.fullmatch(r'func_[0-9A-F]{8}', func or ''):
