@@ -1,6 +1,7 @@
 """Patch gas 2.6 (gas/targ-cpu.c, configure's copy of tc-mips.c) with the two opt-in THPS rules.
 
   THPS_AS_NO_LOAD_SWAP   never move a load into a branch delay slot (gas does this only for -mips1)
+  THPS_AS_NO_STORE_SWAP  never move a store into a branch delay slot either (the game's `sw; jr ra; nop`)
   THPS_AS_COP_INTERLOCKS no coprocessor load/move hazard nops (VR4300 interlocks); keep the one nop between an FP
                          compare and the branch reading it, also when flushing delays at `.set noreorder`
 Without the variables gas behaves exactly as before. Idempotent; fails loudly if the source differs.
@@ -26,6 +27,10 @@ edits = [
     # delay-slot swap: loads never swapped
     ('\t      || (mips_isa < 2\n\t\t  && (prev_pinfo\n\t\t      & (INSN_LOAD_MEMORY_DELAY\n',
      '\t      || ((mips_isa < 2 || getenv ("THPS_AS_NO_LOAD_SWAP") != NULL)\n\t\t  && (prev_pinfo\n\t\t      & (INSN_LOAD_MEMORY_DELAY\n'),
+    # delay-slot swap: stores never swapped
+    ('\t\t\t | INSN_COPROC_MEMORY_DELAY)))\n\t      /* We can not swap with a branch instruction.  */\n',
+     '\t\t\t | INSN_COPROC_MEMORY_DELAY)))\n\t      || (getenv ("THPS_AS_NO_STORE_SWAP") != NULL\n'
+     '\t\t  && (prev_pinfo & INSN_STORE_MEMORY))\n\t      /* We can not swap with a branch instruction.  */\n'),
     # append_insn: coprocessor load delay (mfc1, lwc1 on r3000)
     ('      if (mips_isa < 4\n\t  && ((prev_pinfo & INSN_LOAD_COPROC_DELAY)\n',
      f'      if (mips_isa < 4\n\t  && (({COP} && (prev_pinfo & INSN_LOAD_COPROC_DELAY))\n'),

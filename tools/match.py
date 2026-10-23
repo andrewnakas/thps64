@@ -42,6 +42,9 @@ os.environ['THPS_AS_NO_LOAD_SWAP'] = '1'
 # and no coprocessor load/move hazard nops (the VR4300 interlocks them; the game has `mtc1; cvt.s.w` and `mfc1 $a3; jal`),
 # keeping the single nop between an FP compare and its branch (also at `.set noreorder`)
 os.environ['THPS_AS_COP_INTERLOCKS'] = '1'
+# stores are never moved into a delay slot either (`sw; jr ra; nop` after block copies; 2026-10-22: 0 of 505 matches
+# change, func_8003A410 and the plain-C func_800790D4 match, func_800669CC 71 -> 154/157 instructions)
+os.environ['THPS_AS_NO_STORE_SWAP'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -95,7 +98,7 @@ def float_literals(s_text):
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
-    if data and not (b'THPS_AS_NO_LOAD_SWAP' in data and b'THPS_AS_COP_INTERLOCKS' in data):
+    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
