@@ -9,16 +9,24 @@ extern s32 D_800EA110[];
 
 s32 func_80084914(void *arg0, s32 arg1) {
     s32 sp10[2];
-    s32 *temp_s0_ptr;
-    s32 temp_a2;
-    s32 temp_v0_2;
-    s32 temp_s0;
-    s32 temp_v0;
-    s32 var_v0;
+    s32 *buf;
+    s32 block;
+    s32 offset;
+    s32 base;
+    s32 result;
 
-    temp_v0 = func_8009B898(arg0, arg1, 4);
-    if ((temp_v0 == 0) || ((temp_v0_2 = func_800849FC(arg0, arg1), temp_a2 = *(s32 *) ((u8 *) arg0 + 4), temp_s0_ptr = sp10, temp_a2 += temp_v0_2), func_80084A14(temp_s0_ptr, temp_v0, temp_a2), temp_s0 = func_8009B7D8(arg0, temp_s0_ptr, 2, 8), func_8009ECF8(&D_800EA110, temp_v0), (temp_s0 == 0))) {
-        return 0;
+    block = func_8009B898(arg0, arg1, 4);
+    if (block != 0) {
+        offset = func_800849FC(arg0, arg1);
+        base = *(s32 *) ((u8 *) arg0 + 4);
+        base += offset;
+        buf = sp10;
+        func_80084A14(buf, block, base);
+        result = func_8009B7D8(arg0, buf, 2, 8);
+        func_8009ECF8(&D_800EA110, block);
+        if (result != 0) {
+            return result;
+        }
     }
-    return temp_s0;
+    return 0;
 }
