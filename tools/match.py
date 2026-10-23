@@ -45,6 +45,9 @@ os.environ['THPS_AS_COP_INTERLOCKS'] = '1'
 # stores are never moved into a delay slot either (`sw; jr ra; nop` after block copies; 2026-10-22: 0 of 505 matches
 # change, func_8003A410 and the plain-C func_800790D4 match, func_800669CC 71 -> 154/157 instructions)
 os.environ['THPS_AS_NO_STORE_SWAP'] = '1'
+# and no multiply in a delay slot at all (VR4300 errata): 0 of the game's 2240 mult/multu/mul.s/mul.d sit in one, while
+# other FP ops do (2026-10-23: 0 of 833 matches change; func_8002311C 6 -> 26/29, func_80023190 10 -> 30/33)
+os.environ['THPS_AS_NO_MUL_SWAP'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -188,7 +191,7 @@ def jump_tables(s_text, tmp):
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
-    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP')):
+    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
