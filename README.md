@@ -10,7 +10,10 @@ here reads it locally and never uploads anything.
 - Discord: **https://discord.gg/mf4fp7VKZ8** (help, claims, progress feed)
 - Rules: [RULES.md](RULES.md) · Provenance: [PROVENANCE.md](PROVENANCE.md) · AI agents: [AGENTS.md](AGENTS.md)
 - Licence: [CC0-1.0](LICENSE) for this project's own code and docs; `port/` also contains MIT-licensed code from the Pilotwings 64 recomp, which keeps its licence (`port/LICENSE.pilotwings64-recomp`)
-- Progress right now: `python tools/progress.py` (74 / 1,924 functions on 2026-10-21; it is early days)
+- Progress (updated on every merge; locally: `python tools/progress.py`):
+
+  ![Decompilation progress](https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.svg)
+  [![decompiled](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.json)](tools/progress.py)
 
 ---
 
