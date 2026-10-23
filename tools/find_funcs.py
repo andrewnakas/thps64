@@ -41,11 +41,67 @@ def preamble_start(words, j, floor):
     return k if all(r in lui_regs for r in pending) else j
 
 
+TAIL_REACH = 0x2000   # a branch this far past its unit is real control flow, not a misread data word
+
+
+def split_tails(starts, guessed, words, hi):
+    """Guessed starts (a prologue after a return, a leaf after `jr $ra`) that are really the rest of the function
+    before them: switch cases and shared exits after an early return, which only a jump table or a branch reaches.
+    A branch or `j` from one unit to a label inside a later (or earlier) unit means the starts in between are not
+    function entries; called functions and data pointers to prologues are always kept. -> the starts to drop."""
+    import recomp_syms
+    drop, changed = set(), True
+    while changed:
+        changed = False
+        live = [a for a in starts if a not in drop]
+        for k, a in enumerate(live):
+            b = live[k + 1] if k + 1 < len(live) else hi
+            for p in range(a, b, 4):
+                w = words[(p - VRAM) // 4]
+                t = recomp_syms._branch_target(w, 0)
+                t = p + 4 * t if t is not None else ((p & 0xF0000000) | ((w & 0x3FFFFFF) << 2) if w >> 26 == 2 else None)
+                if t is None or a <= t < b or abs(t - p) > TAIL_REACH or (t in live and t not in guessed):
+                    continue   # inside the unit, too far to trust, or a tail call to a real start
+                between = [s for s in live if (b <= s <= t if t >= b else t < s <= a)]
+                if between and all(s in guessed for s in between):
+                    drop |= set(between)
+                    changed = True
+            if changed:
+                break
+    return drop
+
+
+def pad_tails(starts, words, hi):
+    """Filler between object files: 1-3 non-zero words after a function's last `jr $ra` + delay slot, up to the next
+    16-byte boundary where the next function starts (e.g. 0x8003A8FC, `swl $s4,0x3F6A($ra)` after the epilogue of
+    func_8003A8B4). No C compiles to them, so they get their own asm-only unit `pad_XXXXXXXX`: build.py still links
+    every .s, functable.py lists only func_ units, so they are not counted or offered as functions. -> pad starts."""
+    import recomp_syms
+    out = set()
+    for k, a in enumerate(starts):
+        b = starts[k + 1] if k + 1 < len(starts) else hi
+        if b % 16:
+            continue
+        ws = [words[(p - VRAM) // 4] for p in range(a, b, 4)]
+        last = max((i for i, w in enumerate(ws) if w == 0x03E00008), default=None)
+        if last is None or last + 2 >= len(ws) or len(ws) - (last + 2) > 3 or not any(ws[last + 2:]):
+            continue
+        # branches and `j` inside the unit (word indices); a jump that lands past the return means the words are code
+        targets = [recomp_syms._branch_target(w, i) for i, w in enumerate(ws)]
+        jumps = [((a + 4 * i) & 0xF0000000 | (w & 0x3FFFFFF) << 2) - a >> 2 for i, w in enumerate(ws) if w >> 26 == 2]
+        targets += [t for t in jumps if 0 <= t < len(ws)]   # a `j` elsewhere is a tail call, not a label in here
+        reach = max((t for t in targets if t is not None), default=0)
+        if reach > last + 1:
+            continue   # a branch lands past the return: the words after it are code
+        out.add(a + 4 * (last + 2))
+    return out
+
+
 def main():
     d = open(os.path.join(ROOT, 'work', 'main.bin'), 'rb').read()
     lo, hi = VRAM + TEXT[0], VRAM + TEXT[1]
     words = struct.unpack(f'>{len(d) // 4}I', d)
-    jal, ptr = set(), set()
+    jal, ptr, prologue_ptr = set(), set(), set()
     for i, w in enumerate(words):
         off = 4 * i
         if TEXT[0] <= off < TEXT[1]:
@@ -57,6 +113,7 @@ def main():
             t = (w - VRAM) // 4
             if words[t] >> 16 == 0x27BD and words[t] & 0x8000:
                 ptr.add(w)
+                prologue_ptr.add(w)
             # GCC 2.x C++ vtables: {pointer, 0} pairs. Their entries may be leaf functions that start right after
             # another function's return or tail-call jump (jump tables, by contrast, are runs of bare words).
             elif (i + 1 < len(words) and words[i + 1] == 0) and (words[t - 2] == 0x03E00008 or words[t - 2] >> 26 == 2):
@@ -85,6 +142,7 @@ def main():
         gap = words[(known[0] if known else r + 2):k]
         return len(gap) >= 4 and any(gap) and all(rabbitizer.Instruction(g).isValid() for g in gap)
     after = {a for a in after if a in jal or not falls_into(a)}
+    called = set(jal)   # real entry points: some code calls them
     jal |= after
     # leaf functions (no stack frame) after a return, reached only through pointers: split them off the way
     # recomp_syms does (a `jr $ra` no earlier branch jumps past, then code that ends in a return)
@@ -96,11 +154,20 @@ def main():
     p = os.path.join(ROOT, 'config', 'symbol_addrs.txt')
     keep = open(p).read().split(MARK)[0].rstrip('\n')
     hand = {int(m.group(1), 16) for m in re.finditer(r'=\s*(0x[0-9A-Fa-f]+)', keep)}
+    guessed = (jal | ptr) - called - prologue_ptr - hand
+    tails = split_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), guessed, words, hi)
+    jal -= tails
+    ptr -= tails
+    pads = pad_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), words, hi) - jal - ptr - hand
     lines = [keep, MARK]
     for a in sorted((jal | ptr) - hand):
         lines.append(f'func_{a:08X} = 0x{a:08X}; // type:func')
+    for a in sorted(pads):
+        lines.append(f'pad_{a:08X} = 0x{a:08X}; // type:func')
     open(p, 'w').write('\n'.join(lines) + '\n')
-    print(f'{len(jal)} jal targets + prologues after returns ({len(after)}), {len(ptr)} data pointers to prologues, {len((jal | ptr) - hand)} written')
+    print(f'{len(jal)} jal targets + prologues after returns ({len(after)}), {len(ptr)} data pointers to prologues, '
+          f'{len(tails)} guessed starts merged back (branched over), {len(pads)} inter-file pads split off, '
+          f'{len((jal | ptr) - hand)} written')
 
 
 if __name__ == '__main__':

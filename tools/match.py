@@ -99,8 +99,9 @@ def float_literals(s_text):
 
 
 def _tables(s_text):
-    """GCC's switch jump tables in a .s file: [(function, label, [target labels])], in order."""
-    out, func, block, cur = [], None, False, None
+    """GCC's switch jump tables in a .s file: [(function, label, [target labels], alignment)], in order. GCC puts
+    `.align 3` (8 bytes) before each table, so a table after one with an odd entry count starts 4 bytes later."""
+    out, func, block, cur, align = [], None, False, None, 4
     for line in s_text.split('\n'):
         t = line.strip()
         m = re.match(r'\.ent\s+(\w+)', t)
@@ -113,10 +114,14 @@ def _tables(s_text):
             block, cur = False, None
             continue
         if block:
+            m = re.match(r'\.align\s+(\d+)$', t)
+            if m:
+                align = max(align, 1 << int(m.group(1)))   # `.align 3` then `.align 2`: still 8
             m = re.match(r'(\.L\w+):$', t)
             if m:
-                cur = (func, m.group(1), [])
+                cur = (func, m.group(1), [], max(align, 4))
                 out.append(cur)
+                align = 4
             m = re.match(r'\.word\s+(\.L\w+)$', t)
             if m and cur is not None:
                 cur[2].append(m.group(1))
@@ -145,12 +150,12 @@ def jump_tables(s_text, tmp):
         ours = sec.data() if sec is not None else b''
     main = open(MAIN, 'rb').read()
     mapping, pos, used = {}, 0, {}
-    for func, label, targets in tables:
+    for func, label, targets, align in tables:
         asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', f'{func}.s')
         game = list(dict.fromkeys(re.findall(r'%hi\((jtbl_[0-9A-F]{8})\)', open(asm).read()))) if os.path.exists(asm) else []
         k = used.get(func, 0)
         used[func] = k + 1
-        pos = (pos + 3) & ~3
+        pos = (pos + align - 1) & ~(align - 1)
         words = [struct.unpack('>I', ours[pos + 4 * i:pos + 4 * i + 4])[0] for i in range(len(targets))]
         pos += 4 * len(targets)
         if k >= len(game) or not re.fullmatch(r'func_[0-9A-F]{8}', func or ''):
@@ -276,11 +281,20 @@ def compare(o_file, show=False):
     tdata = text.data()
     tidx = elf.get_section_index('.text')
     masks = {}
+    # `j .Lx` inside the function is relocated against .text itself (gas 2.6 REL: the field holds the target), so
+    # masking it like a call would hide a jump to the wrong instruction (func_80034AA4: `j .L80034C10` built one
+    # word later, caught only by the build gate). Such jumps are compared by their target relative to the function.
+    local_jumps = {}
+    symtab = elf.get_section_by_name('.symtab')
     for sec in elf.iter_sections():
         if isinstance(sec, RelocationSection) and sec.name in ('.rel.text', '.rela.text'):
             for r in sec.iter_relocations():
                 t = r['r_info_type']
                 masks[r['r_offset']] = 0xFC000000 if t == R_MIPS_26 else 0xFFFF0000 if t in (R_MIPS_HI16, R_MIPS_LO16) else 0xFFFFFFFF
+                s = symtab.get_symbol(r['r_info_sym'])
+                if t == R_MIPS_26 and s['st_shndx'] == tidx and s['st_info']['type'] != 'STT_FUNC':
+                    field = struct.unpack_from('>I', text.data(), r['r_offset'])[0] & 0x3FFFFFF
+                    local_jumps[r['r_offset']] = s['st_value'] + (field << 2) + (r['r_addend'] if r.is_RELA() else 0)
     syms = sorted((s['st_value'], s.name) for s in elf.get_section_by_name('.symtab').iter_symbols()
                   if s['st_shndx'] == tidx and s['st_info']['type'] == 'STT_FUNC')
     ok_all = True
@@ -302,6 +316,10 @@ def compare(o_file, show=False):
             a, b = struct.unpack_from('>I', mine, i)[0], struct.unpack_from('>I', theirs, i)[0]
             if (a & mk) != (b & mk):
                 bad.append(i)
+            elif start + i in local_jumps:
+                game_target = ((addr + i) & 0xF0000000) | ((b & 0x3FFFFFF) << 2)
+                if local_jumps[start + i] - start != game_target - addr:
+                    bad.append(i)
         n = len(mine) // 4
         # the C must cover the whole unit: splat sometimes keeps two functions in one asm file, and matching only the
         # first leaves the rest unbuilt (the build gate then sees zeros). Trailing alignment nops count as covered.
