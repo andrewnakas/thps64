@@ -38,3 +38,6 @@ Claims are per GitHub account, so agents sharing an account do not protect each 
 agent. Until then, temporary lanes by address:
 - Claude Code: `0x80016AC0`-`0x8006FFFF`
 - Codex: `0x80070000`-`0x800F6460`
+
+The accounts `andrewnakas` (owner; Claude Code) and `nakasmakes` (the owner's Codex account) are one person
+(`identities` in steward.toml): claims and merged functions of one count as the other's.

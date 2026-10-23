@@ -36,17 +36,9 @@ cd "$W"
 cd mips-binutils-2.6 && git -c safe.directory='*' checkout -q $BU_REV && git -c safe.directory='*' apply "$HERE/binutils-2.6-windows.patch" 2>/dev/null || true
 CC="$CC" ./configure --target=mips-kmc-elf --prefix=/opt/cross --disable-gprof --disable-gdb --disable-werror \
   --host=i386-pc-linux --build=i386-pc-linux > ../bu-configure.log
-# opt-in rule (THPS_AS_NO_LOAD_SWAP, set by tools/match.py): never move a load into a branch delay slot, as the
-# game's assembler did; configure copies tc-mips.c to gas/targ-cpu.c, so patch the copy that gets compiled
-python - gas/targ-cpu.c <<'EOF'
-import sys
-p = sys.argv[1]; s = open(p, newline='').read()
-old = '\t      || (mips_isa < 2\n\t\t  && (prev_pinfo\n\t\t      & (INSN_LOAD_MEMORY_DELAY\n'
-if 'THPS_AS_NO_LOAD_SWAP' not in s:
-    assert s.count(old) == 1, 'gas swap rule not found'
-    s = s.replace(old, old.replace('|| (mips_isa < 2', '|| ((mips_isa < 2 || getenv ("THPS_AS_NO_LOAD_SWAP") != NULL)'))
-    open(p, 'w', newline='').write(s)
-EOF
+# opt-in THPS rules (THPS_AS_NO_LOAD_SWAP, THPS_AS_COP_INTERLOCKS; tools/match.py sets both): configure copies
+# tc-mips.c to gas/targ-cpu.c, so patch the copy that gets compiled. Without the variables gas is unchanged.
+python "$HERE/gas_patch.py" gas/targ-cpu.c gas/as.h
 grep -q THPS_AS_NO_LOAD_SWAP gas/targ-cpu.c
 make -C bfd CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true > ../bu-make.log
 make -C opcodes CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true >> ../bu-make.log

@@ -2,7 +2,8 @@
 """Full build of the main segment: every function from its matched C (src/funcs) or else its splat asm, linked at
 its address, and compared byte for byte with work/main.bin (the unpacked game code).
 
-  python tools/build.py [-j N]      -> build/main.elf, build/main.bin; exit 0 only if identical
+  python tools/build.py [-j N] [--no-cache]   -> build/main.elf, build/main.bin; exit 0 only if identical
+Unchanged objects come from build/objcache (keyed by source bytes + all shared inputs); --no-cache rebuilds all.
 
 This is the whole-binary check behind tools/gate.py's per-function one: it also proves relocations, data and the
 link order. Functions: asm/nonmatchings/game/*.s (splat), C: src/funcs/func_XXXXXXXX.c (KMC GCC 2.7.2 + gas 2.6),
@@ -10,8 +11,10 @@ asm and data: zig's LLVM assembler, link: ld.lld. Symbols splat could not place 
 """
 import concurrent.futures as cf
 import glob
+import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -23,6 +26,7 @@ ZIG = match.ZIG
 VRAM = 0x80016AC0
 OUT = os.path.join(ROOT, 'build')
 OBJ = os.path.join(OUT, 'obj')
+CACHE = os.path.join(OUT, 'objcache')   # content-addressed objects reused across builds (see cached())
 AS_FLAGS = ['cc', '-target', 'mips-freestanding-none', '-mcpu=mips3', '-mabi=32', '-fno-pic', '-mno-abicalls', '-modd-spreg',
             '-c', '-x', 'assembler-with-cpp',
             '-I', os.path.join(ROOT, 'include'), '-I', ROOT]
@@ -117,25 +121,50 @@ def trim_text(obj, size):
     open(obj, 'wb').write(data)
 
 
+def cached(fn, kind, digest):
+    """Wrap an object builder with a content-addressed cache (build/objcache). The key covers the source file's
+    bytes, what kind of object it is, and `digest` (every shared input: tools, include, config, toolchain, the
+    cc1/gas/zig binaries, main.bin), so an object is reused only when nothing it depends on changed. The link and
+    the byte comparison below always run in full."""
+    def run(src, o):
+        h = hashlib.sha256(f'{digest}\0{kind}\0'.encode())
+        h.update(open(src, 'rb').read())
+        hit = os.path.join(CACHE, h.hexdigest() + '.o')
+        if os.path.exists(hit):
+            shutil.copyfile(hit, o)
+            return o
+        fn(src, o)
+        tmp = hit + f'.{os.getpid()}.tmp'
+        shutil.copyfile(o, tmp)
+        os.replace(tmp, hit)
+        return o
+    return run
+
+
 def main():
     import fresh
+    import gate
     fresh.ensure()
-    jobs = int(sys.argv[sys.argv.index('-j') + 1]) if '-j' in sys.argv else 6
+    jobs = int(sys.argv[sys.argv.index('-j') + 1]) if '-j' in sys.argv else max(1, (os.cpu_count() or 2) - 1)
     os.makedirs(OBJ, exist_ok=True)
+    os.makedirs(CACHE, exist_ok=True)
+    digest = 'off' if '--no-cache' in sys.argv else (
+        gate.shared_digest() + f'\0{ZIG}\0{os.path.getsize(ZIG)}\0{AS_FLAGS}\0{match.CFLAGS}\0{match.ASFLAGS}')
+    wrap = (lambda fn, kind: fn) if digest == 'off' else (lambda fn, kind: cached(fn, kind, digest))
     funcs = func_list()
     c_done = {os.path.basename(p)[:-2]: p for p in glob.glob(os.path.join(ROOT, 'src', 'funcs', 'func_*.c'))}
     tasks = []
     for a, sz, name, s_path in funcs:
         o = os.path.join(OBJ, name + '.o')
         if name in c_done:
-            tasks.append((lambda c, o, sz=sz: compile_c(c, o, sz), c_done[name], o))
+            tasks.append((wrap(lambda c, o, sz=sz: compile_c(c, o, sz), f'c:{sz:#x}'), c_done[name], o))
         else:
-            tasks.append((assemble, s_path, o))
+            tasks.append((wrap(assemble, 'asm:wrap'), s_path, o))
     data = []
     for s_path in sorted(glob.glob(os.path.join(ROOT, 'asm', 'data', '*.s'))):
         o = os.path.join(OBJ, os.path.basename(s_path)[:-2] + '.o')
         data.append(o)
-        tasks.append((lambda s, o: assemble(s, o, wrap=False), s_path, o))
+        tasks.append((wrap(lambda s, o: assemble(s, o, wrap=False), 'asm:data'), s_path, o))
     errors = []
     with cf.ThreadPoolExecutor(jobs) as ex:
         futs = [ex.submit(fn, s, o) for fn, s, o in tasks]
