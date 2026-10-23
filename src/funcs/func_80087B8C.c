@@ -1,69 +1,71 @@
 #include "common.h"
-
-void func_80087B8C(void *arg0) {
-    register s32 var_v0 __asm__("$2");
-    register s32 var_v1 __asm__("$3");
-    register s32 one __asm__("$5");
-    register s32 temp_v1 __asm__("$3") = *(s8 *) ((u8 *) arg0 + 0x4F0);
-
-    __asm__("" : "+r" (temp_v1));
-    if (temp_v1 == 0) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0x159;
-        *(s16 *) ((u8 *) arg0 + 0x52E) = 0x44;
-        *(s16 *) ((u8 *) arg0 + 0x530) = 0x23C;
-        *(s16 *) ((u8 *) arg0 + 0x532) = 0x44;
-        *(s32 *) ((u8 *) arg0 + 0x524) = 1;
+typedef struct { u8 pad_000[0x4F0]; s8 field_4F0; u8 pad_4F1[0x33]; s32 field_524; u8 pad_528[4]; s16 field_52C, field_52E, field_530, field_532; } State80087B8C;
+void func_80087B8C(State80087B8C *state) {
+    s32 selection = state->field_4F0;
+    s32 one;
+    if (selection == 0) {
+        state->field_52C = 0x159;
+        state->field_52E = 0x44;
+        state->field_530 = 0x23C;
+        state->field_532 = 0x44;
+        state->field_524 = 1;
         return;
     }
     one = 1;
-    __asm__("" : "+r" (one));
-    if (temp_v1 == one) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0x6F;
-        var_v1 = 0x65;
-        *(s16 *) ((u8 *) arg0 + 0x52E) = var_v1;
-        var_v0 = 0x14D;
-        goto block_23;
-    }
-    if (temp_v1 == 2) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0x160;
-        var_v1 = 0xD3;
-        *(s16 *) ((u8 *) arg0 + 0x52E) = var_v1;
-        var_v0 = 0x244;
-        goto block_23;
-    }
-    if (temp_v1 == 3) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0x89;
-        var_v1 = 0xF3;
-        *(s16 *) ((u8 *) arg0 + 0x52E) = var_v1;
-        var_v0 = 0x16E;
-        goto block_23;
-    }
-    if (temp_v1 == 4) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0xB8;
-        var_v1 = 0x127;
-        goto block_22;
-    }
-    if (temp_v1 == 5) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0xC8;
-        var_v1 = 0x148;
-        goto block_22;
-    }
-    if (temp_v1 == 6) {
-        *(s16 *) ((u8 *) arg0 + 0x52C) = 0xA0;
-        var_v1 = 0x164;
-        goto block_22;
-    }
-    if (temp_v1 != 7) {
+    if (selection == 1) {
+        state->field_52C = 0x6f;
+        state->field_52E = 0x65;
+        state->field_530 = 0x14d;
+        state->field_532 = 0x65;
+        state->field_524 = one;
         return;
     }
-    *(s16 *) ((u8 *) arg0 + 0x52C) = 0xA3;
-    var_v1 = 0x184;
-block_22:
-    *(s16 *) ((u8 *) arg0 + 0x52E) = var_v1;
-    var_v0 = 0x1E8;
-block_23:
-    __asm__("" : "+r" (var_v0), "+r" (var_v1));
-    *(s16 *) ((u8 *) arg0 + 0x530) = var_v0;
-    *(s16 *) ((u8 *) arg0 + 0x532) = var_v1;
-    *(s32 *) ((u8 *) arg0 + 0x524) = one;
+    if (selection == 2) {
+        state->field_52C = 0x160;
+        state->field_52E = 0xd3;
+        state->field_530 = 0x244;
+        state->field_532 = 0xd3;
+        state->field_524 = one;
+        return;
+    }
+    if (selection == 3) {
+        state->field_52C = 0x89;
+        state->field_52E = 0xf3;
+        state->field_530 = 0x16e;
+        state->field_532 = 0xf3;
+        state->field_524 = one;
+        return;
+    }
+    if (selection == 4) {
+        state->field_52C = 0xb8;
+        state->field_52E = 0x127;
+        state->field_530 = 0x1e8;
+        state->field_532 = 0x127;
+        state->field_524 = one;
+        return;
+    }
+    if (selection == 5) {
+        state->field_52C = 0xc8;
+        state->field_52E = 0x148;
+        state->field_530 = 0x1e8;
+        state->field_532 = 0x148;
+        state->field_524 = one;
+        return;
+    }
+    if (selection == 6) {
+        state->field_52C = 0xa0;
+        state->field_52E = 0x164;
+        state->field_530 = 0x1e8;
+        state->field_532 = 0x164;
+        state->field_524 = one;
+        return;
+    }
+    if (selection == 7) {
+        state->field_52C = 0xa3;
+        state->field_52E = 0x184;
+        state->field_530 = 0x1e8;
+        state->field_532 = 0x184;
+        state->field_524 = one;
+        return;
+    }
 }
