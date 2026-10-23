@@ -13,19 +13,12 @@ next_entry:
         if (outer[0x539] != outer[0x535]) {
             row = outer;
             /* Keep the inner row base separate from the advancing outer iterator. */
-            __asm__("" : "+r" (row), "+r" (inner_index));
-            inner = (s8 *)arg0 + inner_index;
-            do {
-                if (inner[0x535] != row[0x535]) {
-                    inner_index++;
-                } else {
-                    if (outer_index != inner_index) {
-                        inner[0x535] = row[0x539];
-                    }
-                    inner_index++;
-                }
+            for (inner_index = 0; inner_index < 4; inner_index++) {
                 inner = (s8 *)arg0 + inner_index;
-            } while (inner_index < 4);
+                if (inner[0x535] == row[0x535] && outer_index != inner_index) {
+                    inner[0x535] = row[0x539];
+                }
+            }
             outer[0x539] = outer[0x535];
         }
         outer++;
