@@ -1,0 +1,154 @@
+#include "common.h"
+
+typedef struct {
+    u8 pad_000[0x2C];
+    void * field_02C;
+    u8 pad_030[0x1];
+    u8 field_031;
+    s16 field_032;
+    u8 pad_034[0x4];
+    s32 field_038;
+    u8 pad_03C[0x10];
+    s32 field_04C;
+    u8 pad_050[0x10];
+    s32 field_060;
+    u8 pad_064[0x1C];
+    u8 field_080;
+    u8 pad_081[0x46F];
+    u8 field_4F0;
+    u8 pad_4F1[0x3];
+    f32 field_4F4;
+    f32 field_4F8;
+    f32 field_4FC;
+    f32 field_500;
+    s16 field_504;
+    s16 field_506;
+    s16 field_508;
+    s16 field_50A;
+    s16 field_50C;
+    s16 field_50E;
+    s16 field_510;
+    s16 field_512;
+    s16 field_514;
+    s16 field_516;
+    s16 field_518;
+    s16 field_51A;
+    s16 field_51C;
+    s16 field_51E;
+    s16 field_520;
+    s16 field_522;
+    s32 field_524;
+    s32 field_528;
+    u8 pad_52C[0x8];
+    u8 field_534;
+    u8 pad_535[0xB];
+    s32 field_540;
+    s32 field_544;
+    s32 field_548;
+    s32 field_54C;
+    u8 pad_550[0x8];
+    f32 field_558;
+    s32 field_55C;
+} State80087930;
+typedef struct { u8 pad_000[0xDC]; s32 field_DC; s32 field_E0; s32 field_E4; s32 field_E8; s32 field_EC; } Global80087930;
+
+void func_800242CC();
+void *func_80039500(void *);
+void func_80087E3C(void *);
+void func_8008B490(void *, void *, s32);
+void func_8008BB2C(void *, s32);
+void *func_8008BB50(void *);
+void func_800A72C0(void *);
+void func_800A73EC(void *, s32);
+void func_800A773C(void *, f32, f32);
+void func_800B198C(void *);
+void func_800B1A80(void *, s32);
+#define D_8001EF00 (*(const f32 *) 0x8001EF00)
+#define D_8001EF04 (*(const f32 *) 0x8001EF04)
+#define D_8001EF08 (*(const f32 *) 0x8001EF08)
+extern u8 D_8001EFF8[];
+extern u8 D_800D0FC0[];
+extern Global80087930 D_800DDC80;
+extern s32 D_800E8E30;
+extern f32 D_800EA9B0;
+extern f32 D_800ECEF0;
+
+void *func_80087930(State80087930 *arg0) {
+    s32 sp10[2];
+    u8 *context;
+    s32 index;
+    f32 temp_f0;
+    f32 temp_f20;
+    void *temp_s0;
+    void *temp_s0_2;
+
+    func_80039500(arg0);
+    arg0->field_02C = &D_8001EFF8;
+    func_800B198C((u8 *) arg0 + 0x34);
+    func_800B198C((u8 *) arg0 + 0x48);
+    func_800B198C((u8 *) arg0 + 0x5C);
+    func_800A72C0((u8 *) arg0 + 0x70);
+    func_800A72C0((u8 *) arg0 + 0x2B0);
+    func_800242CC();
+    context = D_800D0FC0;
+    context[0x1] = 1;
+    temp_f0 = (f32) D_800E8E30;
+    D_800ECEF0 = temp_f0;
+    D_800EA9B0 = temp_f0;
+    index = context[0x16];
+    if (index == 0) {
+        arg0->field_534 = (u8) context[0x2];
+    } else if (index == 1) {
+        arg0->field_534 = (u8) context[0x3];
+    }
+    arg0->field_4F0 = 0;
+    func_800B1A80((u8 *) arg0 + 0x34, 0xA0);
+    arg0->field_038 = 1;
+    func_800B1A80((u8 *) arg0 + 0x48, 3);
+    arg0->field_04C = 1;
+    func_800B1A80((u8 *) arg0 + 0x5C, 2);
+    arg0->field_060 = 1;
+    arg0->field_524 = 0;
+    arg0->field_032 = 0x9F;
+    func_8008BB50(sp10);
+    temp_s0 = (u8 *) arg0 + 0x70;
+    func_800A73EC(temp_s0, 0x501);
+    arg0->field_080 = 0;
+    func_8008B490(sp10, temp_s0, 0x501);
+    temp_s0_2 = (u8 *) arg0 + 0x2B0;
+    func_800A73EC(temp_s0_2, 0x501);
+    func_8008B490(sp10, temp_s0_2, 0x501);
+    temp_f20 = D_8001EF00;
+    func_800A773C(temp_s0_2, temp_f20, temp_f20);
+    arg0->field_031 = 0;
+    arg0->field_558 = (f32) D_8001EF04;
+    arg0->field_55C = 1;
+    func_80087E3C(arg0);
+    arg0->field_528 = 0;
+    arg0->field_540 = (s32) D_800DDC80.field_DC;
+    arg0->field_544 = (s32) D_800DDC80.field_E4;
+    arg0->field_548 = (s32) D_800DDC80.field_E0;
+    arg0->field_54C = (s32) D_800DDC80.field_EC;
+    arg0->field_4F4 = temp_f20;
+    arg0->field_4F8 = temp_f20;
+    arg0->field_4FC = (f32) D_8001EF08;
+    arg0->field_500 = temp_f20;
+    arg0->field_504 = 0x1DF;
+    arg0->field_506 = 0xF0;
+    arg0->field_508 = 0x1E6;
+    arg0->field_50A = 0x109;
+    arg0->field_50C = 0x140;
+    arg0->field_50E = 0x140;
+    arg0->field_510 = 0x154;
+    arg0->field_512 = 0x154;
+    arg0->field_514 = 0x18D;
+    arg0->field_516 = 0x16E;
+    arg0->field_518 = 0xFF;
+    arg0->field_51A = 0xDE;
+    arg0->field_51C = 0xAA;
+    arg0->field_51E = 0x8C;
+    arg0->field_520 = 0x6E;
+    arg0->field_522 = 0x50;
+    func_8008BB2C(sp10, 2);
+    return arg0;
+}
