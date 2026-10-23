@@ -32,7 +32,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xB2;
         arg0->field_0FC = 0xC3;
         arg0->field_100 = 0xC0;
-        return;
     } else if (selection == 1) {
         arg0->field_0F4 = 0xB1;
         arg0->field_0F6 = 0xCC;
@@ -40,7 +39,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xC1;
         arg0->field_0FC = 0xB9;
         arg0->field_100 = 0xBE;
-        return;
     } else if (selection == 2) {
         arg0->field_0F4 = 0xA6;
         arg0->field_0F6 = 0xCA;
@@ -48,7 +46,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xB4;
         arg0->field_0FC = 0xB7;
         arg0->field_100 = 0xBD;
-        return;
     } else if (selection == 3) {
         arg0->field_0FE = 9;
         source = D_8001F7DC;
@@ -58,7 +55,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         destination = (u8 *)arg0 + 0x182;
         source = D_8001F7FC;
         func_800057E4(destination, source);
-        return;
     } else if (selection == 4) {
         arg0->field_0F4 = 0xA7;
         arg0->field_0F6 = 0xCB;
@@ -66,7 +62,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xBA;
         arg0->field_0FC = 0xB6;
         arg0->field_100 = 0xBB;
-        return;
     } else if (selection == 5) {
         arg0->field_0F4 = 0xA9;
         arg0->field_0F6 = 0xCD;
@@ -74,7 +69,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xC2;
         arg0->field_0FC = 0xB5;
         arg0->field_100 = 0xBC;
-        return;
     } else if (selection == 6) {
         arg0->field_0FE = 0xD;
         source = D_8001F818;
@@ -84,7 +78,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         destination = (u8 *)arg0 + 0x182;
         source = D_8001F840;
         func_800057E4(destination, source);
-        return;
     } else if (selection == 7) {
         arg0->field_0F4 = 0xAB;
         arg0->field_0F6 = 0xC9;
@@ -92,7 +85,6 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         arg0->field_0FA = 0xB3;
         arg0->field_0FC = 0xB8;
         arg0->field_100 = 0xBF;
-        return;
     } else if (selection == 8) {
         arg0->field_0FE = 0xE;
         source = D_8001F854;
@@ -102,7 +94,5 @@ void func_8008A0E0(State8008A0E0 *arg0) {
         destination = (u8 *)arg0 + 0x182;
         source = D_8001F87C;
         func_800057E4(destination, source);
-        return;
     }
-    return;
 }
