@@ -1,12 +1,12 @@
 #include "common.h"
 
-#define D_8001EE98 (*(const f64 *)0x8001EE98)
-#define D_8001EEA0 (*(const f64 *)0x8001EEA0)
-#define D_8001EEA8 (*(const f64 *)0x8001EEA8)
-#define D_8001EEB0 (*(const f64 *)0x8001EEB0)
-#define D_8001EEB8 (*(const f64 *)0x8001EEB8)
-#define D_8001EEC0 (*(const f64 *)0x8001EEC0)
-#define D_8001EEC8 (*(const f64 *)0x8001EEC8)
+extern f64 D_8001EE98;
+extern f64 D_8001EEA0;
+extern f64 D_8001EEA8;
+extern f64 D_8001EEB0;
+extern f64 D_8001EEB8;
+extern f64 D_8001EEC0;
+extern f64 D_8001EEC8;
 
 f64 func_8008772C(f64 arg0) {
     f64 previous;
