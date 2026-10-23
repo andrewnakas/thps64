@@ -27,19 +27,17 @@ typedef struct {
     void *field_540[4];
 } State80087ED8;
 void func_80087ED8(State80087ED8 *state) {
-    register void *first_object __asm__("$16");
     void *object;
     void *text;
 
-    first_object = (u8 *)state + 0x70;
     if (state->field_4F0 == 0) {
-        func_800A7AF8(first_object, 0xFC, 0xC2, 0x6B, 0xFF);
-        func_800A7B10(first_object, 0xFC, 0xC2, 0x6B, 0xFF);
-        func_800A773C(first_object, state->field_4FC, state->field_500);
+        func_800A7AF8(((u8 *)state + 0x70), 0xFC, 0xC2, 0x6B, 0xFF);
+        func_800A7B10(((u8 *)state + 0x70), 0xFC, 0xC2, 0x6B, 0xFF);
+        func_800A773C(((u8 *)state + 0x70), state->field_4FC, state->field_500);
     } else {
-        func_800A7AF8(first_object, 0x87, 0xC2, 0xF3, 0xFF);
-        func_800A7B10(first_object, 0x87, 0xC2, 0xF3, 0xFF);
-        func_800A773C(first_object, state->field_4F4, state->field_4F8);
+        func_800A7AF8(((u8 *)state + 0x70), 0x87, 0xC2, 0xF3, 0xFF);
+        func_800A7B10(((u8 *)state + 0x70), 0x87, 0xC2, 0xF3, 0xFF);
+        func_800A773C(((u8 *)state + 0x70), state->field_4F4, state->field_4F8);
     }
     object = (u8 *)state + 0x70;
     func_800A8678(object, (state->field_540[state->field_535[0]]), (f32) state->field_504[0], (f32) state->field_514[0], 2, 0, D_8001EFAC, 0xAA, 0x50, 1, 0, 0, 0, 0);
