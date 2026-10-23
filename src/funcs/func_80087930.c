@@ -63,9 +63,6 @@ void func_800A73EC(void *, s32);
 void func_800A773C(void *, f32, f32);
 void func_800B198C(void *);
 void func_800B1A80(void *, s32);
-#define D_8001EF00 (*(const f32 *) 0x8001EF00)
-#define D_8001EF04 (*(const f32 *) 0x8001EF04)
-#define D_8001EF08 (*(const f32 *) 0x8001EF08)
 extern u8 D_8001EFF8[];
 extern u8 D_800D0FC0[];
 extern Global80087930 D_800DDC80;
@@ -118,10 +115,10 @@ void *func_80087930(State80087930 *arg0) {
     temp_s0_2 = (u8 *) arg0 + 0x2B0;
     func_800A73EC(temp_s0_2, 0x501);
     func_8008B490(sp10, temp_s0_2, 0x501);
-    temp_f20 = D_8001EF00;
+    temp_f20 = 1.2f;
     func_800A773C(temp_s0_2, temp_f20, temp_f20);
     arg0->field_031 = 0;
-    arg0->field_558 = (f32) D_8001EF04;
+    arg0->field_558 = 0.5f;
     arg0->field_55C = 1;
     func_80087E3C(arg0);
     arg0->field_528 = 0;
@@ -131,7 +128,7 @@ void *func_80087930(State80087930 *arg0) {
     arg0->field_54C = (s32) D_800DDC80.field_EC;
     arg0->field_4F4 = temp_f20;
     arg0->field_4F8 = temp_f20;
-    arg0->field_4FC = (f32) D_8001EF08;
+    arg0->field_4FC = 1.3f;
     arg0->field_500 = temp_f20;
     arg0->field_504 = 0x1DF;
     arg0->field_506 = 0xF0;
