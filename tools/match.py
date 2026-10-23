@@ -273,11 +273,20 @@ def compare(o_file, show=False):
     tdata = text.data()
     tidx = elf.get_section_index('.text')
     masks = {}
+    # `j .Lx` inside the function is relocated against .text itself (gas 2.6 REL: the field holds the target), so
+    # masking it like a call would hide a jump to the wrong instruction (func_80034AA4: `j .L80034C10` built one
+    # word later, caught only by the build gate). Such jumps are compared by their target relative to the function.
+    local_jumps = {}
+    symtab = elf.get_section_by_name('.symtab')
     for sec in elf.iter_sections():
         if isinstance(sec, RelocationSection) and sec.name in ('.rel.text', '.rela.text'):
             for r in sec.iter_relocations():
                 t = r['r_info_type']
                 masks[r['r_offset']] = 0xFC000000 if t == R_MIPS_26 else 0xFFFF0000 if t in (R_MIPS_HI16, R_MIPS_LO16) else 0xFFFFFFFF
+                s = symtab.get_symbol(r['r_info_sym'])
+                if t == R_MIPS_26 and s['st_shndx'] == tidx and s['st_info']['type'] != 'STT_FUNC':
+                    field = struct.unpack_from('>I', text.data(), r['r_offset'])[0] & 0x3FFFFFF
+                    local_jumps[r['r_offset']] = s['st_value'] + (field << 2) + (r['r_addend'] if r.is_RELA() else 0)
     syms = sorted((s['st_value'], s.name) for s in elf.get_section_by_name('.symtab').iter_symbols()
                   if s['st_shndx'] == tidx and s['st_info']['type'] == 'STT_FUNC')
     ok_all = True
@@ -299,6 +308,10 @@ def compare(o_file, show=False):
             a, b = struct.unpack_from('>I', mine, i)[0], struct.unpack_from('>I', theirs, i)[0]
             if (a & mk) != (b & mk):
                 bad.append(i)
+            elif start + i in local_jumps:
+                game_target = ((addr + i) & 0xF0000000) | ((b & 0x3FFFFFF) << 2)
+                if local_jumps[start + i] - start != game_target - addr:
+                    bad.append(i)
         n = len(mine) // 4
         # the C must cover the whole unit: splat sometimes keeps two functions in one asm file, and matching only the
         # first leaves the rest unbuilt (the build gate then sees zeros). Trailing alignment nops count as covered.
