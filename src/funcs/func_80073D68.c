@@ -28,7 +28,7 @@ void func_80073D68(State80073D68 *arg0, s32 arg1, s32 arg2) {
     Node80073D68 *var_v1;
     Node80073D68 *var_v1_2;
 
-    switch (arg2) {   
+    switch (arg2) {
     case 0:
         arg0->unk5F6 = D_800FBBE0;
         arg0->unk5FC = D_800FBBC8;
