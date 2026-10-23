@@ -95,6 +95,96 @@ def float_literals(s_text):
     return '\n'.join(out)
 
 
+def _tables(s_text):
+    """GCC's switch jump tables in a .s file: [(function, label, [target labels])], in order."""
+    out, func, block, cur = [], None, False, None
+    for line in s_text.split('\n'):
+        t = line.strip()
+        m = re.match(r'\.ent\s+(\w+)', t)
+        if m:
+            func = m.group(1)
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+            continue
+        if block and t == '.text':
+            block, cur = False, None
+            continue
+        if block:
+            m = re.match(r'(\.L\w+):$', t)
+            if m:
+                cur = (func, m.group(1), [])
+                out.append(cur)
+            m = re.match(r'\.word\s+(\.L\w+)$', t)
+            if m and cur is not None:
+                cur[2].append(m.group(1))
+    return out
+
+
+def jump_tables(s_text, tmp):
+    """Point GCC's switch jump tables at the game's own (jtbl_XXXXXXXX in .rodata) and drop GCC's copy.
+
+    GCC emits each table into the file's own .rodata, which the build cannot place (the game's tables already sit in
+    the game's rodata). The k-th table in a function becomes the k-th jtbl_ symbol the game's asm for that function
+    uses, but only after checking every entry: the original .s is assembled once and each table word (a label offset
+    within the function) must equal the game's table word minus the function's address. Any mismatch leaves the
+    table in place, so the gate reports the file's own .rodata instead of hiding a wrong case mapping."""
+    tables = _tables(s_text)
+    if not tables:
+        return s_text
+    o_file = os.path.join(tmp, 'jt.o')
+    with open(os.path.join(tmp, 'jt.s'), 'w', newline='\n') as f:
+        f.write(s_text)
+    r = subprocess.run([f'{TOOLS}/mips-as.exe', *ASFLAGS, 'jt.s', '-o', 'jt.o'], capture_output=True, text=True, cwd=tmp)
+    if r.returncode:
+        return s_text   # the real assembly step reports the error
+    with open(o_file, 'rb') as fh:
+        sec = ELFFile(fh).get_section_by_name('.rodata')
+        ours = sec.data() if sec is not None else b''
+    main = open(MAIN, 'rb').read()
+    mapping, pos, used = {}, 0, {}
+    for func, label, targets in tables:
+        asm = os.path.join(ROOT, 'asm', 'nonmatchings', 'game', f'{func}.s')
+        game = list(dict.fromkeys(re.findall(r'%hi\((jtbl_[0-9A-F]{8})\)', open(asm).read()))) if os.path.exists(asm) else []
+        k = used.get(func, 0)
+        used[func] = k + 1
+        pos = (pos + 3) & ~3
+        words = [struct.unpack('>I', ours[pos + 4 * i:pos + 4 * i + 4])[0] for i in range(len(targets))]
+        pos += 4 * len(targets)
+        if k >= len(game) or not re.fullmatch(r'func_[0-9A-F]{8}', func or ''):
+            return s_text
+        sym, fva = game[k], int(func[5:], 16)
+        o = int(sym[5:], 16) - MAIN_VRAM
+        theirs = [struct.unpack('>I', main[o + 4 * i:o + 4 * i + 4])[0] for i in range(len(targets))]
+        if theirs != [fva + w for w in words]:
+            return s_text
+        mapping[label] = sym
+    # only drop .rodata that holds nothing but these tables (strings or other data stay, and the gate reports them)
+    block = False
+    for line in s_text.split('\n'):
+        t = line.strip()
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+        elif block and t == '.text':
+            block = False
+        elif block and t and not (t.startswith('.align') or re.fullmatch(r'\.word\s+\.L\w+', t)
+                                  or (t.endswith(':') and t[:-1] in mapping)):
+            return s_text
+    out, block = [], False
+    for line in s_text.split('\n'):
+        t = line.strip()
+        if t.startswith('.section') and '.rodata' in t:
+            block = True
+            continue
+        if block:
+            if t == '.text':
+                block = False
+            continue
+        for label, sym in mapping.items():
+            line = re.sub(r'(?<![\w.$])' + re.escape(label) + r'(?!\w)', sym, line)
+        out.append(line)
+    return '\n'.join(out)
+
+
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
@@ -116,8 +206,8 @@ def build(src, tmp):
         if cmd[0] != CC1:
             with open(s_file) as f:
                 text = f.read()
-            with open(s_file, 'w') as f:
-                f.write(float_literals(text))
+            with open(s_file, 'w', newline='\n') as f:
+                f.write(jump_tables(float_literals(text), tmp))
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
         if r.returncode:
             raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())
