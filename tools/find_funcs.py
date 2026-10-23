@@ -71,6 +71,32 @@ def split_tails(starts, guessed, words, hi):
     return drop
 
 
+def pad_tails(starts, words, hi):
+    """Filler between object files: 1-3 non-zero words after a function's last `jr $ra` + delay slot, up to the next
+    16-byte boundary where the next function starts (e.g. 0x8003A8FC, `swl $s4,0x3F6A($ra)` after the epilogue of
+    func_8003A8B4). No C compiles to them, so they get their own asm-only unit `pad_XXXXXXXX`: build.py still links
+    every .s, functable.py lists only func_ units, so they are not counted or offered as functions. -> pad starts."""
+    import recomp_syms
+    out = set()
+    for k, a in enumerate(starts):
+        b = starts[k + 1] if k + 1 < len(starts) else hi
+        if b % 16:
+            continue
+        ws = [words[(p - VRAM) // 4] for p in range(a, b, 4)]
+        last = max((i for i, w in enumerate(ws) if w == 0x03E00008), default=None)
+        if last is None or last + 2 >= len(ws) or len(ws) - (last + 2) > 3 or not any(ws[last + 2:]):
+            continue
+        # branches and `j` inside the unit (word indices); a jump that lands past the return means the words are code
+        targets = [recomp_syms._branch_target(w, i) for i, w in enumerate(ws)]
+        jumps = [((a + 4 * i) & 0xF0000000 | (w & 0x3FFFFFF) << 2) - a >> 2 for i, w in enumerate(ws) if w >> 26 == 2]
+        targets += [t for t in jumps if 0 <= t < len(ws)]   # a `j` elsewhere is a tail call, not a label in here
+        reach = max((t for t in targets if t is not None), default=0)
+        if reach > last + 1:
+            continue   # a branch lands past the return: the words after it are code
+        out.add(a + 4 * (last + 2))
+    return out
+
+
 def main():
     d = open(os.path.join(ROOT, 'work', 'main.bin'), 'rb').read()
     lo, hi = VRAM + TEXT[0], VRAM + TEXT[1]
@@ -132,12 +158,16 @@ def main():
     tails = split_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), guessed, words, hi)
     jal -= tails
     ptr -= tails
+    pads = pad_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), words, hi) - jal - ptr - hand
     lines = [keep, MARK]
     for a in sorted((jal | ptr) - hand):
         lines.append(f'func_{a:08X} = 0x{a:08X}; // type:func')
+    for a in sorted(pads):
+        lines.append(f'pad_{a:08X} = 0x{a:08X}; // type:func')
     open(p, 'w').write('\n'.join(lines) + '\n')
     print(f'{len(jal)} jal targets + prologues after returns ({len(after)}), {len(ptr)} data pointers to prologues, '
-          f'{len(tails)} guessed starts merged back (branched over), {len((jal | ptr) - hand)} written')
+          f'{len(tails)} guessed starts merged back (branched over), {len(pads)} inter-file pads split off, '
+          f'{len((jal | ptr) - hand)} written')
 
 
 if __name__ == '__main__':
