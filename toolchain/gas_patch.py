@@ -4,9 +4,20 @@
   THPS_AS_COP_INTERLOCKS no coprocessor load/move hazard nops (VR4300 interlocks); keep the one nop between an FP
                          compare and the branch reading it, also when flushing delays at `.set noreorder`
 Without the variables gas behaves exactly as before. Idempotent; fails loudly if the source differs.
-  python gas_patch.py gas/targ-cpu.c
+Also (gas/as.h, always): bcopy is #defined to memcpy where the host has no bcopy (zig/MinGW). The KMC "mulmul"
+fix in input-file.c shifts text forward with an overlapping bcopy, so memcpy garbled the line after every
+mul.s/mul.d (`mul.smul.s`); memmove is the overlap-safe equivalent.
+  python gas_patch.py gas/targ-cpu.c gas/as.h
 """
 import sys
+
+if len(sys.argv) > 2:
+    h = sys.argv[2]
+    t = open(h, newline='').read()
+    old, new = '#define bcopy(src,dest,size)\tmemcpy(dest,src,size)', '#define bcopy(src,dest,size)\tmemmove(dest,src,size)'
+    if new not in t:
+        assert t.count(old) == 1, 'gas/as.h bcopy define not found'
+        open(h, 'w', newline='').write(t.replace(old, new))
 
 p = sys.argv[1]
 s = open(p, newline='').read()
