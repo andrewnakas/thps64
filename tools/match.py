@@ -93,6 +93,13 @@ def float_literals(s_text):
             if os.path.exists(asm):
                 queue = [('d' if op == 'ldc1' else 's', sym) for op, sym in re.findall(
                     r'\b(lwc1|ldc1)\s+\$f\d+, %lo\((D_[0-9A-F]{8})\)\(\$at\)', open(asm).read())]
+        # a literal the C reads through the game's own symbol (extern f64 D_x, e.g. DBL_MAX, which GCC 2.8 never
+        # emits as li.d) is the game's k-th literal too: consume its slot so the later li.s/li.d stay in step
+        m = re.match(r'\s*l\.[sd]\s+\$f\d+,\s*(D_[0-9A-F]{8})\s*$', line)
+        if m and queue and queue[0][1] == m.group(1):
+            queue.pop(0)
+            out.append(line)
+            continue
         m = re.match(r'(\s*)li\.([sd])\s+(\$f\d+),\s*(\S+)\s*$', line)
         if m and queue and queue[0][0] == m.group(2):
             if main is None:
