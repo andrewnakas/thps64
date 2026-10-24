@@ -14,3 +14,7 @@ To check that the C really behaves like the game, build a ROM with it: `python t
 (or `--nonmatching=func_A,func_B`), `python tools/pack_rom.py build/nm.z64 --main build/nm/main.bin`, and boot it
 (`tools/emu_shots.sh`); `python tools/nm_bisect.py` boots one ROM per file and reports which ones change the
 screenshots. See the comment above `NM_REGION` in tools/build.py for how the C is linked.
+
+`scores.csv` holds each function's similarity to the game (percent, masked-disassembly diff). The progress report
+uses it as the function's fuzzy match. After adding or changing a file here, run `python tools/nonmatching.py
+--scores` and commit the updated `scores.csv`.

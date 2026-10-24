@@ -3,7 +3,10 @@
 #
 # Builds an objdiff-format report.json from config/functions.csv and src/funcs/ only:
 # no ROM, no ROM-derived objects. Every merged src/funcs file passed tools/gate.py on
-# the judge machine, so each one counts as a 100% match.
+# the judge machine, so each one counts as a 100% match. Non-matching functions
+# (src/nonmatching) count with their similarity from src/nonmatching/scores.csv
+# (tools/nonmatching.py --scores, run locally). A unit whose functions are all matched is
+# reported complete ("linked"): tools/build.py proves the linked binary byte-identical.
 #
 # ByteMatch and the decompilati.onl GitHub App both read the artifact named
 # <VERSION>_report from successful push runs on the default branch.
@@ -40,6 +43,8 @@ jobs:
           --version "$VERSION"
           --source-path src/funcs
           --split-at-pads config/symbol_addrs.txt
+          --fuzzy src/nonmatching/scores.csv
+          --complete-when-matched
           -o "build/$VERSION/report.json"
 
       - name: Upload report artifact
