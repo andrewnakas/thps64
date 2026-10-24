@@ -1,10 +1,6 @@
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 -ffast-math */
 #include "common.h"
-typedef struct {
-    f32 x;
-    f32 y;
-    f32 z;
-} Vec3f;
+#include "vecmath.h"
 void func_80022964(s32 *arg0) {
     Vec3f v;
     f32 x, y, z;
