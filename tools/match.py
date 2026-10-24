@@ -138,21 +138,22 @@ def _tables(s_text):
     return out
 
 
-def jump_tables(s_text, tmp):
+def jump_tables(s_text, tmp, asflags=None):
     """Point GCC's switch jump tables at the game's own (jtbl_XXXXXXXX in .rodata) and drop GCC's copy.
 
     GCC emits each table into the file's own .rodata, which the build cannot place (the game's tables already sit in
     the game's rodata). The k-th table in a function becomes the k-th jtbl_ symbol the game's asm for that function
     uses, but only after checking every entry: the original .s is assembled once and each table word (a label offset
     within the function) must equal the game's table word minus the function's address. Any mismatch leaves the
-    table in place, so the gate reports the file's own .rodata instead of hiding a wrong case mapping."""
+    table in place, so the gate reports the file's own .rodata instead of hiding a wrong case mapping. `asflags` are
+    the file's own assembler flags (e.g. `-Wa,-no-m4100` hazard nops shift the label offsets the check compares)."""
     tables = _tables(s_text)
     if not tables:
         return s_text
     o_file = os.path.join(tmp, 'jt.o')
     with open(os.path.join(tmp, 'jt.s'), 'w', newline='\n') as f:
         f.write(s_text)
-    r = subprocess.run([f'{TOOLS}/mips-as.exe', *ASFLAGS, 'jt.s', '-o', 'jt.o'], capture_output=True, text=True, cwd=tmp)
+    r = subprocess.run([f'{TOOLS}/mips-as.exe', *(ASFLAGS if asflags is None else asflags), 'jt.s', '-o', 'jt.o'], capture_output=True, text=True, cwd=tmp)
     if r.returncode:
         return s_text   # the real assembly step reports the error
     with open(o_file, 'rb') as fh:
@@ -260,7 +261,7 @@ def build(src, tmp):
             with open(s_file) as f:
                 text = f.read()
             with open(s_file, 'w', newline='\n') as f:
-                f.write(jump_tables(float_literals(text), tmp))
+                f.write(jump_tables(float_literals(text), tmp, asflags))
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
         if r.returncode:
             raise CompileError((r.stderr or r.stdout).replace(i_file, os.path.basename(src)).strip())
