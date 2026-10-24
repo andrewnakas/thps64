@@ -4,6 +4,7 @@ Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only
 
 
 ## Final state (2026-10-24)
+- Post-mortem (what worked, what did not, checklist for the next game): docs/POSTMORTEM.md
 - **2449 / 2512 functions byte-matched (86.85% of code bytes)** in `src/funcs`; the default build is byte-identical.
 - **2511 / 2512 decompiled (99.78%)**: the 62 functions that resist matching have reviewed, behaviour-equivalent C
   in `src/nonmatching` (RULES.md rule 9; `python tools/nonmatching.py`). Each was checked block by block against

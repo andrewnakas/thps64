@@ -46,6 +46,8 @@ function still link that function's original assembly, so the project is not 100
   with a controller. `tools/nm_bisect.py` boots one ROM per function to find any function whose C misbehaves.
 - **What is left:** turning non-matching functions into matching ones. Once a function matches, move its file to
   `src/funcs/` and delete the copy in `src/nonmatching/`. The full engineering log is in [STATUS.md](STATUS.md).
+- **Post-mortem:** what worked and what didn't, with a checklist for the next game, in
+  [docs/POSTMORTEM.md](docs/POSTMORTEM.md).
 
 ---
 
