@@ -14,3 +14,7 @@
 7. Tick who made the PR. AI agents may contribute, but must tick every box themselves on every PR, after checking
    it against the PR's actual changes, plus the agent acknowledgement. Names and comments need a reason, not a guess.
 8. Steward merges when the deterministic gates pass; its AI notes only explain. Appeals: open an issue labelled `appeal`.
+9. Non-matching C (owner decision 2026-10-24): a function that resists matching may get readable,
+   behaviour-equivalent C in `src/nonmatching/func_XXXXXXXX.c` with a `NON_MATCHING:` comment on what differs. The
+   build keeps its asm, so nothing changes in the binary; `python tools/nonmatching.py` must pass (compiles, not
+   also in src/funcs). These count as decompiled, not matched. Maintainers review them for equivalence.
