@@ -254,10 +254,41 @@ FILE_CFLAGS = {'-O2', '-fno-schedule-insns', '-fno-schedule-insns2', '-fcse-foll
                '-Wa,-no-m4100', '-Wa,-O0'}
 
 
-def file_cflags(src):
-    """The extra flags a C file asks for in its first-line `/* cflags: ... */` comment (whitelisted)."""
+# Per-file compiler: the default is GCC 2.8.1 cc1 (C). Parts of the game are C++ (g++ 2.x vtables, inlined operator
+# new, constructors); a file compiled as C++ by the same GCC 2.8.1 sources opts in with a FIRST-line comment
+#   /* compiler: cc1plus */
+# (its `/* cflags: ... */` comment, if any, then goes on the second line). Only the names below are accepted. The
+# function itself must be `extern "C"` so its symbol stays func_XXXXXXXX. C++ files are preprocessed as C++ and
+# compiled with -fno-exceptions (the game has no EH tables or __throw calls).
+CC1PLUS = os.environ.get('THPS_CC1PLUS', os.path.join(os.path.dirname(CC1), 'cc1plus.exe'))
+COMPILERS = {'cc1plus': (lambda: CC1PLUS, 'c++', ['-fno-exceptions'])}
+
+
+def _first_lines(src):
     with open(src, encoding='utf-8', errors='replace') as f:
-        first = f.readline()
+        return f.readline(), f.readline()
+
+
+def file_compiler(src):
+    """-> (cc1 path, preprocessor language, extra cc1 flags) for a file: its `/* compiler: NAME */` first line, or
+    the default GCC 2.8.1 cc1 for C."""
+    m = re.match(r'\s*/\*\s*compiler:\s*(\S+)\s*\*/', _first_lines(src)[0])
+    if not m:
+        return CC1, 'c', []
+    if m.group(1) not in COMPILERS:
+        raise CompileError(f'compiler comment: unknown compiler {m.group(1)} (allowed: {" ".join(sorted(COMPILERS))})')
+    path, lang, flags = COMPILERS[m.group(1)]
+    if not os.path.isfile(path()):
+        raise CompileError(f'{m.group(1)} not found at {path()}: rebuild the toolchain (or set THPS_CC1PLUS)')
+    return path(), lang, flags
+
+
+def file_cflags(src):
+    """The extra flags a C file asks for in its first-line `/* cflags: ... */` comment (whitelisted); after a
+    `/* compiler: ... */` first line, the cflags comment is the second line."""
+    first, second = _first_lines(src)
+    if re.match(r'\s*/\*\s*compiler:', first):
+        first = second
     m = re.match(r'\s*/\*\s*cflags:(.*?)\*/', first)
     if not m:
         return []
@@ -274,16 +305,17 @@ def build(src, tmp):
     asflags = [a for a in ASFLAGS if a != '-m4100'] if '-Wa,-no-m4100' in extra else ASFLAGS
     asflags = asflags + ['-O0'] if '-Wa,-O0' in extra else asflags
     extra = [x for x in extra if not x.startswith('-Wa,')]
-    i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
+    cc1, lang, cc1_flags = file_compiler(src)
+    i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.ii' if lang == 'c++' else '.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
-    r = subprocess.run([ZIG, 'cc', '-E', '-x', 'c', '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
+    r = subprocess.run([ZIG, 'cc', '-E', '-x', lang, '-nostdinc', '-undef', '-D__GNUC__=2', '-D_MIPS_SZLONG=32',
                     '-I', os.path.join(ROOT, 'include'), '-I', os.path.join(ROOT, 'src'),
                     '-D_LANGUAGE_C', '-DF3DEX_GBI', src, '-o', i_file], capture_output=True, text=True)
     if r.returncode:   # the preprocessor's own message (missing include, bad #define), not a command dump
         raise CompileError((r.stderr or r.stdout).replace(src, os.path.basename(src)).strip())
-    for cmd, cwd in (([CC1, *CFLAGS, *extra, i_file, '-o', s_file], None),
+    for cmd, cwd in (([cc1, *CFLAGS, *cc1_flags, *extra, i_file, '-o', s_file], None),
                      ([f'{TOOLS}/mips-as.exe', *asflags, s_file, '-o', o_file], tmp)):
-        if cmd[0] != CC1:
+        if cmd[0] != cc1:
             with open(s_file) as f:
                 text = f.read()
             with open(s_file, 'w', newline='\n') as f:
