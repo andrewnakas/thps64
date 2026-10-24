@@ -1,4 +1,4 @@
-# Tony Hawk's Pro Skater (N64) — matching decompilation
+# Tony Hawk's Pro Skater (N64) — decompilation
 
 This project is rebuilding the C source code of **Tony Hawk's Pro Skater for the Nintendo 64** (US, V1.1),
 one function at a time, so that it compiles back into **exactly the same machine code** as the original game.
@@ -15,6 +15,31 @@ here reads it locally and never uploads anything.
   ![Decompilation progress](https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.svg)
   [![decompiled](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.json)](tools/progress.py)
 
+## Status: fully decompiled (October 2026)
+
+**Every function of the game's code has been decompiled to C, except one library routine.**
+
+| | functions | share of code bytes |
+|---|---|---|
+| **Matching** C: compiles to the original bytes (`src/funcs/`) | **2,449 / 2,512** | **86.85%** |
+| **Decompiled** in total: matching + non-matching C (`src/nonmatching/`) | **2,511 / 2,512** | **99.78%** |
+| Kept as assembly: libgcc `__udivdi3` (not game code; see [docs/ASM_UNITS.md](docs/ASM_UNITS.md)) | 1 | 0.22% |
+
+- **Non-matching functions.** The last 62 functions resisted a byte-for-byte match. Each one has readable,
+  behaviour-equivalent C in `src/nonmatching/`, checked block by block against the original assembly. Each file
+  starts with a `NON_MATCHING:` note that names what still differs. Usually that is a register-allocation or
+  scheduling choice inside GCC 2.8.1. A few are switch statements that our compiler lays out differently, a libc
+  built by another toolchain, or GTE code left over from the PlayStation original.
+- **The matching build is still exact.** `python tools/build.py` rebuilds the game code byte-identical. It uses
+  the original assembly for the 62 non-matching functions.
+- **A playable decompiled build.** `python tools/build.py --nonmatching` builds the game with all 62 non-matching
+  functions running from their C, and `python tools/pack_rom.py build/rom/thps_decomp.z64` packs that into a copy
+  of your ROM. In mupen64plus it boots through the title screen and the attract demo. Its screenshots are
+  identical to the original game's from 10 to 90 seconds (headless, 4 MB, no input). The game is also playable
+  with a controller. `tools/nm_bisect.py` boots one ROM per function to find any function whose C misbehaves.
+- **What is left:** turning non-matching functions into matching ones. Once a function matches, move its file to
+  `src/funcs/` and delete the copy in `src/nonmatching/`. The full engineering log is in [STATUS.md](STATUS.md).
+
 ---
 
 ## Contents
@@ -24,9 +49,10 @@ here reads it locally and never uploads anything.
 4. [Decompile your first function](#decompile-your-first-function)
 5. [How contributions get checked and merged (Steward)](#how-contributions-get-checked-and-merged-steward)
 6. [Provenance and AI agents](#provenance-and-ai-agents)
-7. [Repository map](#repository-map)
-8. [The native port (static recompilation)](#the-native-port-static-recompilation)
-9. [FAQ](#faq)
+7. [Non-matching C and the playable decompiled build](#non-matching-c-and-the-playable-decompiled-build)
+8. [Repository map](#repository-map)
+9. [The native port (static recompilation)](#the-native-port-static-recompilation)
+10. [FAQ](#faq)
 
 ---
 
@@ -157,11 +183,31 @@ and sources listed. Steward does not merge a PR with an unticked box.
 every statement against that PR's actual changes, and tick the agent acknowledgement **on every PR**. See
 [AGENTS.md](AGENTS.md) for the full agent workflow.
 
+## Non-matching C and the playable decompiled build
+
+Some functions cannot be byte-matched with our toolchain, even when their C is known to be right. Mature N64
+decomps keep such functions as "NON_MATCHING" C, and this project does the same ([RULES.md](RULES.md) rule 9):
+
+- `src/nonmatching/func_XXXXXXXX.c` uses the same conventions as `src/funcs`, plus a `NON_MATCHING:` comment
+  saying what still differs. Maintainers review each one for equivalence before it is merged.
+- `python tools/nonmatching.py` checks that every such file compiles and is not also matched, and reports how
+  many instructions agree. `python tools/progress.py` reports *matched* and *decompiled* separately.
+- **Playable build:** `python tools/build.py --nonmatching` compiles every non-matching function into a small
+  code region taken from the start of the heap, and patches a jump to it at the original address. Every other
+  address stays the same. `--nonmatching=func_A,func_B` and `--nonmatching-exclude=...` select which functions
+  use C. `python tools/pack_rom.py build/rom/OUT.z64 --main build/nm/main.bin` writes the result into a copy of
+  your ROM as uncompressed chunks and fixes the checksum. The output goes under the git-ignored `build/` folder.
+- **Checking behaviour:** `tools/emu_shots.sh` boots a ROM headless in mupen64plus and takes screenshots.
+  `tools/nm_bisect.py` does that once per non-matching function and compares each run with the original. This is
+  how a text-rendering bug in one function's C was found and fixed.
+
 ## Repository map
 
 | Path | What it is |
 |---|---|
 | `src/funcs/func_XXXXXXXX.c` | matched functions, one per file |
+| `src/nonmatching/func_XXXXXXXX.c` | equivalent C for the functions that do not byte-match (not used by the exact build) |
+| `docs/ASM_UNITS.md` | what stays assembly, and why |
 | `include/` | `common.h` (types), assembler macros for the full build |
 | `config/main.yaml`, `boot.yaml` | splat configuration for the two segments |
 | `config/functions.csv` | every function: address and size (progress is counted against it) |
@@ -171,6 +217,9 @@ every statement against that PR's actual changes, and tick the agent acknowledge
 | `tools/split.py` | clean re-split: find_funcs, splat, function table |
 | `tools/new_func.py`, `match.py` | draft a function; compare it instruction by instruction |
 | `tools/gate.py`, `build.py` | the two Steward gates |
+| `tools/nonmatching.py` | checks `src/nonmatching` (compiles, `NON_MATCHING:` note, not also matched) |
+| `tools/build.py --nonmatching`, `pack_rom.py` | the playable decompiled build: C for every function, packed into a ROM copy |
+| `tools/emu_shots.sh`, `nm_bisect.py` | headless emulator screenshots; per-function behaviour check |
 | `tools/auto_draft.py`, `progress.py` | bulk m2c pass; progress counter |
 | `tools/recomp_*.py`, `recomp/`, `port/` | static recompilation (below) |
 | `toolchain/` | native Windows build of the compiler and assembler |
@@ -200,5 +249,10 @@ and the `--show` diff).
 **Why does a function "match" on its own but the build fails?** Sometimes splat keeps two functions in one
 assembly file, and your C has to cover the whole unit. `tools/match.py` says so explicitly.
 
-**What does "0.1% done" mean?** The share of game functions (or of code bytes) whose C is merged and proven
-byte-identical. Small functions go first; the big ones carry most of the bytes.
+**What do "matched" and "decompiled" mean?** *Matched* is the share of game functions (or of code bytes) whose C
+is merged and proven byte-identical. *Decompiled* also counts the reviewed, equivalent C in `src/nonmatching/`.
+The game is 99.78% decompiled and 86.85% matched.
+
+**Is the game fully decompiled?** Yes, except libgcc's 64-bit divide (`__udivdi3`). That function is not game code:
+it is byte-identical to GCC 2.8.1's own `libgcc2.c`, which is GPL. Since this repository is CC0, it stays as
+assembly ([docs/ASM_UNITS.md](docs/ASM_UNITS.md)).
