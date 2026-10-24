@@ -196,6 +196,11 @@ def main():
         for line in open(os.path.join(ROOT, 'config', f)):
             if re.match(r'\s*\w+\s*=\s*0x[0-9A-Fa-f]+;', line):
                 lines.append(line.strip())
+    # symbols outside main that C calls by another name (splat leaves `absolute:True` ones out of the files above)
+    for line in open(os.path.join(ROOT, 'config', 'symbol_addrs.txt')):
+        m = re.match(r'\s*(\w+\s*=\s*0x[0-9A-Fa-f]+;).*absolute:True', line)
+        if m:
+            lines.append(m.group(1))
     script = os.path.join(OUT, 'main.ld')
     open(script, 'w', newline='\n').write('\n'.join(lines).replace('\\', '/') + '\n')
     elf, binf = os.path.join(OUT, 'main.elf'), os.path.join(OUT, 'main.bin')

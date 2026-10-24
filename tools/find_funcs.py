@@ -71,30 +71,111 @@ def split_tails(starts, guessed, words, hi):
     return drop
 
 
-def pad_tails(starts, words, hi):
-    """Filler between object files: 1-3 non-zero words after a function's last `jr $ra` + delay slot, up to the next
-    16-byte boundary where the next function starts (e.g. 0x8003A8FC, `swl $s4,0x3F6A($ra)` after the epilogue of
-    func_8003A8B4). No C compiles to them, so they get their own asm-only unit `pad_XXXXXXXX`: build.py still links
-    every .s, functable.py lists only func_ units, so they are not counted or offered as functions. -> pad starts."""
+def reached_end(words, a, b, entries):
+    """Index (in words from a) just past the last instruction that control flow reaches from the unit's start or
+    from a data pointer into it (jump-table cases, callbacks): branches, `j` inside the unit, delay slots; a
+    return, `j` or unconditional `b` ends a path. Words past it are never executed."""
     import recomp_syms
-    out = set()
+    n, seen, work = (b - a) // 4, set(), [0] + [(p - a) // 4 for p in entries if a < p < b]
+    while work:
+        i = work.pop()
+        while 0 <= i < n and i not in seen:
+            seen.add(i)
+            w = words[(a - VRAM) // 4 + i]
+            t = recomp_syms._branch_target(w, i)
+            stop = False
+            if t is not None:
+                work.append(t)
+                stop = w >> 16 in (0x1000, 0x0401)                  # b (beq $0,$0 / bgez $0)
+            elif w >> 26 == 2:                                      # j: a label in here, else a tail call
+                tj = ((a + 4 * i) & 0xF0000000) | ((w & 0x3FFFFFF) << 2)
+                if a <= tj < b:
+                    work.append((tj - a) // 4)
+                stop = True
+            elif w >> 26 == 0 and w & 0x3F == 8:                    # jr
+                stop = True
+            if t is not None or stop:
+                seen.add(i + 1)                                     # delay slot
+                if stop:
+                    break
+                i += 2
+                continue
+            i += 1
+    return min(n, max(seen) + 1)
+
+
+def fall_through(starts, guessed, words, hi, entries):
+    """Guessed starts that the code before them runs into (no return, jump or `b` in its last two words, and control
+    flow reaches its end): GCC scheduled an argument move ahead of the prologue, e.g. `mtc1 $a1,$f12` at 0x800A4350
+    (called) before `addiu $sp,$sp,-0x50` at 0x800A4354 (found only by the prologue scan). -> starts to drop."""
+    def ends_path(w):
+        return w >> 26 == 2 or (w >> 26 == 0 and w & 0x3F == 8) or w >> 16 in (0x1000, 0x0401)
+    starts, drop = sorted(starts), set()
+    for k in range(1, len(starts)):
+        p, a = starts[k - 1], starts[k]
+        ws = words[(p - VRAM) // 4:(a - VRAM) // 4]
+        if a in guessed and not any(ends_path(w) for w in ws[-2:]) and reached_end(words, p, a, entries) == len(ws):
+            drop.add(a)
+    return drop
+
+
+def junk_word(w):
+    """A word GCC 2.8.1 (-mgp32) never emits in the game's C code: invalid, a load/store based on $zero, a 64-bit
+    integer op, $k0/$k1, COP0/COP2/COP3. Only used on the few words right before a 16-byte boundary."""
+    import rabbitizer
+    x = rabbitizer.Instruction(w)
+    if not x.isValid():
+        return True
+    op, rs, rt = w >> 26, (w >> 21) & 31, (w >> 16) & 31
+    if op in (0x10, 0x12, 0x13, 0x32, 0x33, 0x36, 0x37, 0x3A, 0x3B, 0x3E, 0x3F, 0x18, 0x19, 0x1A, 0x1B):
+        return True                                                 # cop0/2/3, ld/sd, daddi(u), ldl/ldr
+    if 0x20 <= op <= 0x2F and rs == 0:
+        return True                                                 # load/store at an absolute address < 0x8000
+    if op == 0 and (w & 0x3F) in (0x14, 0x16, 0x17, 0x2C, 0x2D, 0x2E, 0x2F, 0x38, 0x3A, 0x3B, 0x3C, 0x3E, 0x3F):
+        return True                                                 # dsllv .. dsra32
+    return op not in (0x11, 0x31, 0x35, 0x39, 0x3D) and bool({rs, rt, (w >> 11) & 31 if op == 0 else 0} & {26, 27})
+
+
+def pad_tails(starts, words, hi, entries, guessed):
+    """Filler between object files: 1-3 non-zero words after a function's code, up to the next 16-byte boundary
+    where the next object file (function) starts (e.g. 0x8003A8FC, `swl $s4,0x3F6A($ra)` after the epilogue of
+    func_8003A8B4). No C compiles to them, so they get their own asm-only unit `pad_XXXXXXXX`: build.py still links
+    every .s, functable.py lists only func_ units, so they are not counted or offered as functions.
+    "After the code" = past the last word control flow reaches (reached_end), so filler words that happen to decode
+    as branches (0x8002C65C `blez`, 0x8002EC7C `bltzal`) no longer hide it. Two more shapes:
+    - a guessed start (no caller, no pointer) 1-3 words before a 16-byte boundary whose words there can't be GCC
+      code (junk_word: 0x8005E79C `lhu $t4,0x8F($zero)`): the function starts at the boundary, the words are filler;
+    - filler and then, at the boundary, a small function nothing calls (0x80072F10 `jr $ra; move $v0,$zero`).
+    -> (pad starts, starts to drop, starts to add)."""
+    import recomp_syms
+    starts = sorted(starts)
+    drop, add = set(), set()
     for k, a in enumerate(starts):
         b = starts[k + 1] if k + 1 < len(starts) else hi
-        if b % 16:
+        s16 = (a + 15) & ~15
+        if a in guessed and a % 16 and s16 < b and any(junk_word(words[(p - VRAM) // 4]) for p in range(a, s16, 4)) \
+                and words[(s16 - VRAM) // 4 - 2] != 0x03E00008 \
+                and recomp_syms.looks_like_code(words[(s16 - VRAM) // 4:(b - VRAM) // 4]):
+            drop.add(a)
+            add.add(s16)
+    starts = sorted((set(starts) - drop) | add)
+    pads = set()
+    for k, a in enumerate(starts):
+        b = starts[k + 1] if k + 1 < len(starts) else hi
+        e = a + 4 * reached_end(words, a, b, entries)
+        if e >= b:
             continue
-        ws = [words[(p - VRAM) // 4] for p in range(a, b, 4)]
-        last = max((i for i, w in enumerate(ws) if w == 0x03E00008), default=None)
-        if last is None or last + 2 >= len(ws) or len(ws) - (last + 2) > 3 or not any(ws[last + 2:]):
+        s16 = (e + 15) & ~15
+        tail = words[(e - VRAM) // 4:(s16 - VRAM) // 4]
+        if s16 == e or not any(tail) or 0x03E00008 in tail:
             continue
-        # branches and `j` inside the unit (word indices); a jump that lands past the return means the words are code
-        targets = [recomp_syms._branch_target(w, i) for i, w in enumerate(ws)]
-        jumps = [((a + 4 * i) & 0xF0000000 | (w & 0x3FFFFFF) << 2) - a >> 2 for i, w in enumerate(ws) if w >> 26 == 2]
-        targets += [t for t in jumps if 0 <= t < len(ws)]   # a `j` elsewhere is a tail call, not a label in here
-        reach = max((t for t in targets if t is not None), default=0)
-        if reach > last + 1:
-            continue   # a branch lands past the return: the words after it are code
-        out.add(a + 4 * (last + 2))
-    return out
+        if s16 == b:
+            pads.add(e)
+        elif s16 < b and any(junk_word(w) for w in tail) \
+                and recomp_syms.looks_like_code(words[(s16 - VRAM) // 4:(b - VRAM) // 4]):
+            pads.add(e)
+            add.add(s16)
+    return pads, drop, add
 
 
 def main():
@@ -158,7 +239,13 @@ def main():
     tails = split_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), guessed, words, hi)
     jal -= tails
     ptr -= tails
-    pads = pad_tails(sorted(a for a in jal | ptr | hand if lo <= a < hi), words, hi) - jal - ptr - hand
+    text_ptrs = {w for i, w in enumerate(words) if not TEXT[0] <= 4 * i < TEXT[1] and lo <= w < hi and w % 4 == 0}
+    falls = fall_through({a for a in jal | ptr | hand if lo <= a < hi}, guessed - tails, words, hi, text_ptrs)
+    jal -= falls
+    pads, junk, leaves = pad_tails({a for a in jal | ptr | hand if lo <= a < hi}, words, hi, text_ptrs,
+                                   guessed - tails)
+    jal = (jal - junk) | leaves
+    pads -= jal | ptr | hand
     lines = [keep, MARK]
     for a in sorted((jal | ptr) - hand):
         lines.append(f'func_{a:08X} = 0x{a:08X}; // type:func')
@@ -166,7 +253,9 @@ def main():
         lines.append(f'pad_{a:08X} = 0x{a:08X}; // type:func')
     open(p, 'w').write('\n'.join(lines) + '\n')
     print(f'{len(jal)} jal targets + prologues after returns ({len(after)}), {len(ptr)} data pointers to prologues, '
-          f'{len(tails)} guessed starts merged back (branched over), {len(pads)} inter-file pads split off, '
+          f'{len(tails)} guessed starts merged back (branched over), {len(pads)} inter-file pads split off '
+          f'({len(junk)} starts moved past filler, {len(leaves) - len(junk)} leaves after filler), '
+          f'{len(falls)} guessed starts merged back (run into), '
           f'{len((jal | ptr) - hand)} written')
 
 

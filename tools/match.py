@@ -48,6 +48,16 @@ os.environ['THPS_AS_NO_STORE_SWAP'] = '1'
 # and no multiply in a delay slot at all (VR4300 errata): 0 of the game's 2240 mult/multu/mul.s/mul.d sit in one, while
 # other FP ops do (2026-10-23: 0 of 833 matches change; func_8002311C 6 -> 26/29, func_80023190 10 -> 30/33)
 os.environ['THPS_AS_NO_MUL_SWAP'] = '1'
+# the KMC mulmul emulation (a nop between a float multiply and a following mult/mul.s) also counted every column-0
+# line as a float multiply: a label or the blank line after `.set reorder`, so a multiply at a branch target got a
+# nop. The game has 36 multiplies at branch targets, 35 without one (2026-10-23)
+os.environ['THPS_AS_MULMUL_CODE_ONLY'] = '1'
+# with -no-m4100 (files whose mflo/mfhi -> mult/div hazards have nops), gas also padded mflo/mfhi before GCC's own
+# `.set noreorder` branch + delay slot; the game never has a nop between mflo/mfhi and a branch (0 of 168)
+os.environ['THPS_AS_NO_HILO_FLUSH'] = '1'
+# a label right before an instruction that needs hazard nops stays before them, so branches to it run the nops too
+# (the game's branch targets at `c.lt.s; nop; bc1t` are the nop: 2 of 2)
+os.environ['THPS_AS_LABEL_BEFORE_NOPS'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -196,7 +206,10 @@ def jump_tables(s_text, tmp):
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
-    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP')):
+    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP',
+                                                    b'THPS_AS_MULMUL_CODE_ONLY', b'THPS_AS_NO_HILO_FLUSH',
+                                                    b'THPS_AS_O0_AS_O2',
+                                                    b'THPS_AS_LABEL_BEFORE_NOPS')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
@@ -207,9 +220,11 @@ def _check_gas():
 # Only these flags are accepted, so a file cannot change anything else about the compiler.
 # `-Wa,-no-m4100` is for the assembler: such files were assembled without -m4100, so gas pads mflo/mfhi -> mult/div
 # hazards with nops the way the game does in those files (func_80042E78, func_80042F58, func_800673B0 match only so).
+# `-Wa,-O0`: such files were assembled without delay-slot filling: gas leaves every slot GCC did not fill itself as a
+# nop (the game has both `addiu $sp,-N; addiu $sp,N; jr $ra; nop` (11) and `addiu $sp,-N; jr $ra; addiu $sp,N` (9)).
 FILE_CFLAGS = {'-O2', '-fno-schedule-insns', '-fno-schedule-insns2', '-fcse-follow-jumps', '-fcse-skip-blocks',
                '-frerun-cse-after-loop', '-fexpensive-optimizations', '-fno-strength-reduce', '-ffast-math',
-               '-Wa,-no-m4100'}
+               '-Wa,-no-m4100', '-Wa,-O0'}
 
 
 def file_cflags(src):
@@ -230,6 +245,7 @@ def build(src, tmp):
     _check_gas()
     extra = file_cflags(src)
     asflags = [a for a in ASFLAGS if a != '-m4100'] if '-Wa,-no-m4100' in extra else ASFLAGS
+    asflags = asflags + ['-O0'] if '-Wa,-O0' in extra else asflags
     extra = [x for x in extra if not x.startswith('-Wa,')]
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)

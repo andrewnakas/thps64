@@ -39,7 +39,7 @@ CC="$CC" ./configure --target=mips-kmc-elf --prefix=/opt/cross --disable-gprof -
 # opt-in THPS rules (THPS_AS_NO_LOAD_SWAP, THPS_AS_COP_INTERLOCKS; tools/match.py sets both): configure copies
 # tc-mips.c to gas/targ-cpu.c, so patch the copy that gets compiled. Without the variables gas is unchanged.
 python "$HERE/gas_patch.py" gas/targ-cpu.c gas/as.h
-grep -q THPS_AS_NO_LOAD_SWAP gas/targ-cpu.c
+grep -q THPS_AS_NO_LOAD_SWAP gas/targ-cpu.c && grep -q THPS_AS_MULMUL_CODE_ONLY gas/input-file.c && grep -q THPS_AS_NO_HILO_FLUSH gas/targ-cpu.c && grep -q THPS_AS_O0_AS_O2 gas/targ-cpu.c && grep -q THPS_AS_LABEL_BEFORE_NOPS gas/targ-cpu.c
 make -C bfd CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true > ../bu-make.log
 make -C opcodes CC="$CC" CFLAGS=-O1 AR="$AR" RANLIB=true >> ../bu-make.log
 # libiberty's link probe cannot run under clang; these are the functions MinGW lacks

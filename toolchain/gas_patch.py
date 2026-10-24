@@ -5,12 +5,29 @@
   THPS_AS_NO_MUL_SWAP    never move mult/multu/dmult/dmultu/mul.s/mul.d into a delay slot (VR4300 errata)
   THPS_AS_COP_INTERLOCKS no coprocessor load/move hazard nops (VR4300 interlocks); keep the one nop between an FP
                          compare and the branch reading it, also when flushing delays at `.set noreorder`
+  THPS_AS_NO_HILO_FLUSH  (only matters with -no-m4100) no HI/LO hazard nops when gas flushes delays at a `.set
+                         noreorder` directive (GCC's own branch + delay slot; macros like div still get them): the game never has `mflo/mfhi; nop; branch`
+                         (0 of 168 mflo/mfhi followed by a branch within two words), while -no-m4100 files do
+                         have `mflo; nop; nop; mult` (67)
+  THPS_AS_LABEL_BEFORE_NOPS a label right before an instruction that needs hazard nops stays before the nops (gas
+                         moved it after them): the game's 2 branch targets at `c.cond; nop; bc1x` are the nop, 0
+                         are the bc1x (func_80034AA4, func_8002A588)
+  THPS_AS_MULMUL_CODE_ONLY  (gas/input-file.c, the KMC "mulmul" fix) a line starting in column 0 (a label, or the
+                         blank line GCC prints after `.set reorder`) does not count as a float multiply, so a
+                         mult/mul.s right after a branch target gets no nop: the game has 36 multiplies at branch
+                         targets, 35 without a nop before them
 Without the variables gas behaves exactly as before. Idempotent; fails loudly if the source differs.
 Also (gas/as.h, always): bcopy is #defined to memcpy where the host has no bcopy (zig/MinGW). The KMC "mulmul"
 fix in input-file.c shifts text forward with an overlapping bcopy, so memcpy garbled the line after every
 mul.s/mul.d (`mul.smul.s`); memmove is the overlap-safe equivalent.
+Also (gas/targ-cpu.c, always): `-O0` works. gas 2.6 tests the second character of the option argument (`arg[1]`),
+so `-O0` (argument "0") left mips_optimize at 2; it now sets 1 as documented: no instruction is moved into a delay
+slot (hazard nops stay as they are). match.py passes it for files with `-Wa,-O0` (THPS_AS_O0_AS_O2 restores the old
+reading; the name also lets match.py see that the binary has the fix).
+Also (gas/input-file.c, next to gas/as.h) THPS_AS_MULMUL_CODE_ONLY above.
   python gas_patch.py gas/targ-cpu.c gas/as.h
 """
+import os
 import sys
 
 if len(sys.argv) > 2:
@@ -20,10 +37,19 @@ if len(sys.argv) > 2:
     if new not in t:
         assert t.count(old) == 1, 'gas/as.h bcopy define not found'
         open(h, 'w', newline='').write(t.replace(old, new))
+    # gas/input-file.c (next to as.h): the mulmul emulation counts any column-0 line as a float multiply
+    i = os.path.join(os.path.dirname(h), 'input-file.c')
+    t = open(i, newline='').read()
+    old = '                            if ((local_28 == cur_insn) ||\n'
+    new = '                            if ((local_28 == cur_insn && getenv ("THPS_AS_MULMUL_CODE_ONLY") == NULL) ||\n'
+    if new not in t:
+        assert t.count(old) == 1, 'gas/input-file.c mulmul column-0 test not found'
+        open(i, 'w', newline='').write(t.replace(old, new))
 
 p = sys.argv[1]
 s = open(p, newline='').read()
 COP = '(getenv ("THPS_AS_COP_INTERLOCKS") == NULL)'
+HILO = '(! thps_set_noreorder || getenv ("THPS_AS_NO_HILO_FLUSH") == NULL)'
 edits = [
     # delay-slot swap: loads never swapped
     ('\t      || (mips_isa < 2\n\t\t  && (prev_pinfo\n\t\t      & (INSN_LOAD_MEMORY_DELAY\n',
@@ -55,6 +81,25 @@ edits = [
     # mips_emit_delays: one nop (not two) after an FP compare
     ('\t  if ((mips_isa < 4\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n',
      f'\t  if ((mips_isa < 4 && {COP}\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n'),
+    # append_insn / mips_emit_delays: keep a pending label before the hazard nops
+    ('\t      frag_grow (40);\n\t    }\n\t  if (insn_label != NULL)\n',
+     '\t      frag_grow (40);\n\t    }\n\t  if (insn_label != NULL && getenv ("THPS_AS_LABEL_BEFORE_NOPS") == NULL)\n'),
+    ('\t  emit_nop ();\n\t  if (insn_label != NULL)\n',
+     '\t  emit_nop ();\n\t  if (insn_label != NULL && getenv ("THPS_AS_LABEL_BEFORE_NOPS") == NULL)\n'),
+    # `-O0`: test the option argument's first character
+    ("    case 'O':\n      if (arg && arg[1] == '0')\n", "    case 'O':\n      if (arg && arg[0] == '0' && getenv (\"THPS_AS_O0_AS_O2\") == NULL)\n"),
+    # mips_emit_delays: no HI/LO hazard nops at `.set noreorder` (macros such as div still flush them)
+    ('   kept for the previous instructions.  */\n\nstatic void\nmips_emit_delays ()\n',
+     '   kept for the previous instructions.  */\n\nstatic int thps_set_noreorder;\n\nstatic void\nmips_emit_delays ()\n'),
+    ('  else if (strcmp (name, "noreorder") == 0)\n    {\n      mips_emit_delays ();\n',
+     '  else if (strcmp (name, "noreorder") == 0)\n    {\n      thps_set_noreorder = 1;\n      mips_emit_delays ();\n'
+     '      thps_set_noreorder = 0;\n'),
+    ('(! interlocks\n\t      && (prev_insn.insn_mo->pinfo\n\t\t  & (INSN_READ_LO',
+     f'(! interlocks && {HILO}\n\t      && (prev_insn.insn_mo->pinfo\n\t\t  & (INSN_READ_LO'),
+    ('(! interlocks\n\t\t  && ((prev_insn.insn_mo->pinfo & INSN_READ_HI)',
+     f'(! interlocks && {HILO}\n\t\t  && ((prev_insn.insn_mo->pinfo & INSN_READ_HI)'),
+    ('(! interlocks\n\t\t   && ((prev_prev_insn.insn_mo->pinfo & INSN_READ_HI)',
+     f'(! interlocks && {HILO}\n\t\t   && ((prev_prev_insn.insn_mo->pinfo & INSN_READ_HI)'),
 ]
 for old, new in edits:
     if new in s:
