@@ -55,6 +55,9 @@ os.environ['THPS_AS_MULMUL_CODE_ONLY'] = '1'
 # with -no-m4100 (files whose mflo/mfhi -> mult/div hazards have nops), gas also padded mflo/mfhi before GCC's own
 # `.set noreorder` branch + delay slot; the game never has a nop between mflo/mfhi and a branch (0 of 168)
 os.environ['THPS_AS_NO_HILO_FLUSH'] = '1'
+# a label right before an instruction that needs hazard nops stays before them, so branches to it run the nops too
+# (the game's branch targets at `c.lt.s; nop; bc1t` are the nop: 2 of 2)
+os.environ['THPS_AS_LABEL_BEFORE_NOPS'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -205,7 +208,8 @@ def _check_gas():
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
     if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP',
                                                     b'THPS_AS_MULMUL_CODE_ONLY', b'THPS_AS_NO_HILO_FLUSH',
-                                                    b'THPS_AS_O0_AS_O2')):
+                                                    b'THPS_AS_O0_AS_O2',
+                                                    b'THPS_AS_LABEL_BEFORE_NOPS')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 

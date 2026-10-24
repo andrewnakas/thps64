@@ -9,6 +9,9 @@
                          noreorder` directive (GCC's own branch + delay slot; macros like div still get them): the game never has `mflo/mfhi; nop; branch`
                          (0 of 168 mflo/mfhi followed by a branch within two words), while -no-m4100 files do
                          have `mflo; nop; nop; mult` (67)
+  THPS_AS_LABEL_BEFORE_NOPS a label right before an instruction that needs hazard nops stays before the nops (gas
+                         moved it after them): the game's 2 branch targets at `c.cond; nop; bc1x` are the nop, 0
+                         are the bc1x (func_80034AA4, func_8002A588)
   THPS_AS_MULMUL_CODE_ONLY  (gas/input-file.c, the KMC "mulmul" fix) a line starting in column 0 (a label, or the
                          blank line GCC prints after `.set reorder`) does not count as a float multiply, so a
                          mult/mul.s right after a branch target gets no nop: the game has 36 multiplies at branch
@@ -78,6 +81,11 @@ edits = [
     # mips_emit_delays: one nop (not two) after an FP compare
     ('\t  if ((mips_isa < 4\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n',
      f'\t  if ((mips_isa < 4 && {COP}\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n'),
+    # append_insn / mips_emit_delays: keep a pending label before the hazard nops
+    ('\t      frag_grow (40);\n\t    }\n\t  if (insn_label != NULL)\n',
+     '\t      frag_grow (40);\n\t    }\n\t  if (insn_label != NULL && getenv ("THPS_AS_LABEL_BEFORE_NOPS") == NULL)\n'),
+    ('\t  emit_nop ();\n\t  if (insn_label != NULL)\n',
+     '\t  emit_nop ();\n\t  if (insn_label != NULL && getenv ("THPS_AS_LABEL_BEFORE_NOPS") == NULL)\n'),
     # `-O0`: test the option argument's first character
     ("    case 'O':\n      if (arg && arg[1] == '0')\n", "    case 'O':\n      if (arg && arg[0] == '0' && getenv (\"THPS_AS_O0_AS_O2\") == NULL)\n"),
     # mips_emit_delays: no HI/LO hazard nops at `.set noreorder` (macros such as div still flush them)
