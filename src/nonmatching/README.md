@@ -9,3 +9,8 @@ first lines) and carries a `NON_MATCHING:` comment near the top with the best sc
 `python tools/nonmatching.py` checks that every file compiles and reports how many instructions agree.
 
 Matched it? Move the file to `src/funcs/` (drop the NON_MATCHING comment) and open a normal PR.
+
+To check that the C really behaves like the game, build a ROM with it: `python tools/build.py --nonmatching`
+(or `--nonmatching=func_A,func_B`), `python tools/pack_rom.py build/nm.z64 --main build/nm/main.bin`, and boot it
+(`tools/emu_shots.sh`); `python tools/nm_bisect.py` boots one ROM per file and reports which ones change the
+screenshots. See the comment above `NM_REGION` in tools/build.py for how the C is linked.
