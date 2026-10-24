@@ -81,14 +81,16 @@ def mult_out_of_delay_slots(s_text):
     None of the game's 2240 multiplies sits in a delay slot (probably a VR4300 errata rule of the original tools);
     where GCC 2.8.1's delay-slot filler puts `mult`/`multu` after a branch (also one taken from the fall-through
     or copied from the target), the game has `mult; branch; nop` (all 19 such sites, 17 functions, e.g. func_8006F3F0,
-    func_8006FAD4, func_80075694). The slot always executes, so the move keeps the meaning. Branch-likely slots
+    func_8006FAD4, func_80075694). The slot always executes, so the move keeps the meaning. The mult stays inside
+    the noreorder block: the VR4300 interlocks loads, and the game has no nop between a load and the moved mult
+    (func_80067F30), which gas would add in reorder mode. Branch-likely slots
     (annulled when not taken) are left alone."""
     lines = s_text.split('\n')
     for i in range(2, len(lines) - 1):
         if (lines[i - 2] == '\t.set\tnoreorder' and lines[i - 1] == '\t.set\tnomacro'
                 and re.match(r'\t(b(?!\w*[^a]l\t)\w*|j|jal|jr|jalr)\t', lines[i])
                 and re.match(r'\td?multu?\t', lines[i + 1])):
-            lines[i - 2:i + 2] = [lines[i + 1], lines[i - 2], lines[i - 1], lines[i], '\tnop']
+            lines[i - 2:i + 2] = [lines[i - 2], lines[i - 1], lines[i + 1], lines[i], '\tnop']
     return '\n'.join(lines)
 
 
