@@ -104,6 +104,21 @@ def reached_end(words, a, b, entries):
     return min(n, max(seen) + 1)
 
 
+def fall_through(starts, guessed, words, hi, entries):
+    """Guessed starts that the code before them runs into (no return, jump or `b` in its last two words, and control
+    flow reaches its end): GCC scheduled an argument move ahead of the prologue, e.g. `mtc1 $a1,$f12` at 0x800A4350
+    (called) before `addiu $sp,$sp,-0x50` at 0x800A4354 (found only by the prologue scan). -> starts to drop."""
+    def ends_path(w):
+        return w >> 26 == 2 or (w >> 26 == 0 and w & 0x3F == 8) or w >> 16 in (0x1000, 0x0401)
+    starts, drop = sorted(starts), set()
+    for k in range(1, len(starts)):
+        p, a = starts[k - 1], starts[k]
+        ws = words[(p - VRAM) // 4:(a - VRAM) // 4]
+        if a in guessed and not any(ends_path(w) for w in ws[-2:]) and reached_end(words, p, a, entries) == len(ws):
+            drop.add(a)
+    return drop
+
+
 def junk_word(w):
     """A word GCC 2.8.1 (-mgp32) never emits in the game's C code: invalid, a load/store based on $zero, a 64-bit
     integer op, $k0/$k1, COP0/COP2/COP3. Only used on the few words right before a 16-byte boundary."""
@@ -225,6 +240,8 @@ def main():
     jal -= tails
     ptr -= tails
     text_ptrs = {w for i, w in enumerate(words) if not TEXT[0] <= 4 * i < TEXT[1] and lo <= w < hi and w % 4 == 0}
+    falls = fall_through({a for a in jal | ptr | hand if lo <= a < hi}, guessed - tails, words, hi, text_ptrs)
+    jal -= falls
     pads, junk, leaves = pad_tails({a for a in jal | ptr | hand if lo <= a < hi}, words, hi, text_ptrs,
                                    guessed - tails)
     jal = (jal - junk) | leaves
@@ -238,6 +255,7 @@ def main():
     print(f'{len(jal)} jal targets + prologues after returns ({len(after)}), {len(ptr)} data pointers to prologues, '
           f'{len(tails)} guessed starts merged back (branched over), {len(pads)} inter-file pads split off '
           f'({len(junk)} starts moved past filler, {len(leaves) - len(junk)} leaves after filler), '
+          f'{len(falls)} guessed starts merged back (run into), '
           f'{len((jal | ptr) - hand)} written')
 
 
