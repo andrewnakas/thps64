@@ -5,12 +5,18 @@
   THPS_AS_NO_MUL_SWAP    never move mult/multu/dmult/dmultu/mul.s/mul.d into a delay slot (VR4300 errata)
   THPS_AS_COP_INTERLOCKS no coprocessor load/move hazard nops (VR4300 interlocks); keep the one nop between an FP
                          compare and the branch reading it, also when flushing delays at `.set noreorder`
+  THPS_AS_MULMUL_CODE_ONLY  (gas/input-file.c, the KMC "mulmul" fix) a line starting in column 0 (a label, or the
+                         blank line GCC prints after `.set reorder`) does not count as a float multiply, so a
+                         mult/mul.s right after a branch target gets no nop: the game has 36 multiplies at branch
+                         targets, 35 without a nop before them
 Without the variables gas behaves exactly as before. Idempotent; fails loudly if the source differs.
 Also (gas/as.h, always): bcopy is #defined to memcpy where the host has no bcopy (zig/MinGW). The KMC "mulmul"
 fix in input-file.c shifts text forward with an overlapping bcopy, so memcpy garbled the line after every
 mul.s/mul.d (`mul.smul.s`); memmove is the overlap-safe equivalent.
+Also (gas/input-file.c, next to gas/as.h) THPS_AS_MULMUL_CODE_ONLY above.
   python gas_patch.py gas/targ-cpu.c gas/as.h
 """
+import os
 import sys
 
 if len(sys.argv) > 2:
@@ -20,6 +26,14 @@ if len(sys.argv) > 2:
     if new not in t:
         assert t.count(old) == 1, 'gas/as.h bcopy define not found'
         open(h, 'w', newline='').write(t.replace(old, new))
+    # gas/input-file.c (next to as.h): the mulmul emulation counts any column-0 line as a float multiply
+    i = os.path.join(os.path.dirname(h), 'input-file.c')
+    t = open(i, newline='').read()
+    old = '                            if ((local_28 == cur_insn) ||\n'
+    new = '                            if ((local_28 == cur_insn && getenv ("THPS_AS_MULMUL_CODE_ONLY") == NULL) ||\n'
+    if new not in t:
+        assert t.count(old) == 1, 'gas/input-file.c mulmul column-0 test not found'
+        open(i, 'w', newline='').write(t.replace(old, new))
 
 p = sys.argv[1]
 s = open(p, newline='').read()

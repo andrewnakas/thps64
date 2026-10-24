@@ -48,6 +48,10 @@ os.environ['THPS_AS_NO_STORE_SWAP'] = '1'
 # and no multiply in a delay slot at all (VR4300 errata): 0 of the game's 2240 mult/multu/mul.s/mul.d sit in one, while
 # other FP ops do (2026-10-23: 0 of 833 matches change; func_8002311C 6 -> 26/29, func_80023190 10 -> 30/33)
 os.environ['THPS_AS_NO_MUL_SWAP'] = '1'
+# the KMC mulmul emulation (a nop between a float multiply and a following mult/mul.s) also counted every column-0
+# line as a float multiply: a label or the blank line after `.set reorder`, so a multiply at a branch target got a
+# nop. The game has 36 multiplies at branch targets, 35 without one (2026-10-23)
+os.environ['THPS_AS_MULMUL_CODE_ONLY'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -196,7 +200,8 @@ def jump_tables(s_text, tmp):
 def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
-    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP')):
+    if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP',
+                                                    b'THPS_AS_MULMUL_CODE_ONLY')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
