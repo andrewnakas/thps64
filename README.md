@@ -14,6 +14,8 @@ here reads it locally and never uploads anything.
 
   ![Decompilation progress](https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.svg)
   [![decompiled](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/andrewnakas/thps64/progress/progress.json)](tools/progress.py)
+  [![matched](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/andrewnakas/thps64/progress/matched.json)](tools/progress.py)
+  [![fuzzy match](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/andrewnakas/thps64/progress/fuzzy.json)](https://bytematch.dev/andrewnakas/thps64)
 
 ## Status: fully decompiled (October 2026)
 
