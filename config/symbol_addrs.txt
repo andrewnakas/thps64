@@ -1,7 +1,11 @@
 thps_main = 0x800C0480; // type:func
-// kept as a start although func_80097D34 branches back into func_80097B78: merged, splat reads most of the unit
-// as data (it holds words that decode as jal 0x84001120, outside RAM); left split until that region is understood
-func_80097D34 = 0x80097D34; // type:func
+// func_80097B78 is a 50-instruction C++ destructor (ends `jr $ra` at 0x80097C3C). The words after it, 0x80097C40 up
+// to func_8009B0A0 (jal target, real CPU code again), are RSP microcode text, not CPU code: n_aspMain from
+// 0x80097C40 (n64sym: n_aspMainTextStart), rspboot 0x800988A0, gspF3DEX2_NoN_fifo 0x80098970, _xbus 0x80099D00.
+// The size ends the destructor's unit; D_80097C40 starts a unit that holds invalid CPU words, so splat emits it as
+// .word data with no size and functable.py does not count it.
+func_80097B78 = 0x80097B78; // type:func size:0xC8
+D_80097C40 = 0x80097C40;
 // boot segment (n64sym: _nsqrtf): what GCC's inline sqrt.s calls when the result is NaN (`jal sqrtf`, 15 call sites
 // in main, each right after `c.eq.s; bc1t`), so C using sqrtf()/__builtin_sqrtf links to it
 sqrtf = 0x800073F0; // type:func absolute:True
@@ -1704,7 +1708,6 @@ func_800977C0 = 0x800977C0; // type:func
 func_800979CC = 0x800979CC; // type:func
 func_80097AF0 = 0x80097AF0; // type:func
 func_80097B44 = 0x80097B44; // type:func
-func_80097B78 = 0x80097B78; // type:func
 func_800998CC = 0x800998CC; // type:func
 func_8009AC5C = 0x8009AC5C; // type:func
 func_8009B0A0 = 0x8009B0A0; // type:func
