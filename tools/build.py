@@ -201,6 +201,15 @@ def main():
         m = re.match(r'\s*(\w+\s*=\s*0x[0-9A-Fa-f]+;).*absolute:True', line)
         if m:
             lines.append(m.group(1))
+    # names C calls for code that is already a func_XXXXXXXX in main (libgcc helpers); kept out of symbol_addrs.txt
+    # because find_funcs/splat would stop treating those addresses as functions
+    aliases = os.path.join(ROOT, 'config', 'link_aliases.txt')
+    if os.path.exists(aliases):
+        with open(aliases) as f:
+            for line in f:
+                m = re.match(r'\s*(\w+\s*=\s*0x[0-9A-Fa-f]+;)', line)
+                if m:
+                    lines.append(m.group(1))
     script = os.path.join(OUT, 'main.ld')
     open(script, 'w', newline='\n').write('\n'.join(lines).replace('\\', '/') + '\n')
     elf, binf = os.path.join(OUT, 'main.elf'), os.path.join(OUT, 'main.bin')
