@@ -17,6 +17,10 @@ Without the variables gas behaves exactly as before. Idempotent; fails loudly if
 Also (gas/as.h, always): bcopy is #defined to memcpy where the host has no bcopy (zig/MinGW). The KMC "mulmul"
 fix in input-file.c shifts text forward with an overlapping bcopy, so memcpy garbled the line after every
 mul.s/mul.d (`mul.smul.s`); memmove is the overlap-safe equivalent.
+Also (gas/targ-cpu.c, always): `-O0` works. gas 2.6 tests the second character of the option argument (`arg[1]`),
+so `-O0` (argument "0") left mips_optimize at 2; it now sets 1 as documented: no instruction is moved into a delay
+slot (hazard nops stay as they are). match.py passes it for files with `-Wa,-O0` (THPS_AS_O0_AS_O2 restores the old
+reading; the name also lets match.py see that the binary has the fix).
 Also (gas/input-file.c, next to gas/as.h) THPS_AS_MULMUL_CODE_ONLY above.
   python gas_patch.py gas/targ-cpu.c gas/as.h
 """
@@ -74,6 +78,8 @@ edits = [
     # mips_emit_delays: one nop (not two) after an FP compare
     ('\t  if ((mips_isa < 4\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n',
      f'\t  if ((mips_isa < 4 && {COP}\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n'),
+    # `-O0`: test the option argument's first character
+    ("    case 'O':\n      if (arg && arg[1] == '0')\n", "    case 'O':\n      if (arg && arg[0] == '0' && getenv (\"THPS_AS_O0_AS_O2\") == NULL)\n"),
     # mips_emit_delays: no HI/LO hazard nops at `.set noreorder` (macros such as div still flush them)
     ('   kept for the previous instructions.  */\n\nstatic void\nmips_emit_delays ()\n',
      '   kept for the previous instructions.  */\n\nstatic int thps_set_noreorder;\n\nstatic void\nmips_emit_delays ()\n'),

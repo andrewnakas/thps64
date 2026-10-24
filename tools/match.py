@@ -204,7 +204,8 @@ def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
     if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP',
-                                                    b'THPS_AS_MULMUL_CODE_ONLY', b'THPS_AS_NO_HILO_FLUSH')):
+                                                    b'THPS_AS_MULMUL_CODE_ONLY', b'THPS_AS_NO_HILO_FLUSH',
+                                                    b'THPS_AS_O0_AS_O2')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
@@ -215,9 +216,11 @@ def _check_gas():
 # Only these flags are accepted, so a file cannot change anything else about the compiler.
 # `-Wa,-no-m4100` is for the assembler: such files were assembled without -m4100, so gas pads mflo/mfhi -> mult/div
 # hazards with nops the way the game does in those files (func_80042E78, func_80042F58, func_800673B0 match only so).
+# `-Wa,-O0`: such files were assembled without delay-slot filling: gas leaves every slot GCC did not fill itself as a
+# nop (the game has both `addiu $sp,-N; addiu $sp,N; jr $ra; nop` (11) and `addiu $sp,-N; jr $ra; addiu $sp,N` (9)).
 FILE_CFLAGS = {'-O2', '-fno-schedule-insns', '-fno-schedule-insns2', '-fcse-follow-jumps', '-fcse-skip-blocks',
                '-frerun-cse-after-loop', '-fexpensive-optimizations', '-fno-strength-reduce', '-ffast-math',
-               '-Wa,-no-m4100'}
+               '-Wa,-no-m4100', '-Wa,-O0'}
 
 
 def file_cflags(src):
@@ -238,6 +241,7 @@ def build(src, tmp):
     _check_gas()
     extra = file_cflags(src)
     asflags = [a for a in ASFLAGS if a != '-m4100'] if '-Wa,-no-m4100' in extra else ASFLAGS
+    asflags = asflags + ['-O0'] if '-Wa,-O0' in extra else asflags
     extra = [x for x in extra if not x.startswith('-Wa,')]
     i_file, s_file, o_file = (os.path.join(tmp, 'x' + e) for e in ('.i', '.s', '.o'))
     # clang's preprocessor (old cccp crashes on Windows)
