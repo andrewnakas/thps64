@@ -1,5 +1,5 @@
 /* cflags: -O2 */
-/* NON_MATCHING: aln ratio 0.717 (581 vs 588 insns); frame layout, float register allocation, argument spills and texture-rectangle scheduling differ. Reviewed for equivalence 2026-10-24: yl/yoff are s16 so the t-clamp test is (s16)yl + (s16)yoff < 0 as in the game. */
+/* NON_MATCHING: aln ratio 0.717 (581 vs 588 insns); frame layout, float register allocation, argument spills and texture-rectangle scheduling differ. Texture rectangles use tile 1 like the game (tile 0 garbled all text when booted, 2026-10-24). Reviewed for equivalence 2026-10-24: yl/yoff are s16 so the t-clamp test is (s16)yl + (s16)yoff < 0 as in the game. */
 #include "common.h"
 
 typedef struct {
@@ -243,7 +243,7 @@ f32 func_800A7B50(FontA7B50 *f, f32 x, f32 y, u8 *str, s32 measure, u8 *colors, 
                     yl = yl0 + o;
                     yh = yh0 + o;
                 }
-                gSPScisTextureRectangle(D_800F36A4++, xl + xoff, yl + yoff, xh + xoff, yh + yoff, 0, s, t, dsdx, dtdy);
+                gSPScisTextureRectangle(D_800F36A4++, xl + xoff, yl + yoff, xh + xoff, yh + yoff, 1, s, t, dsdx, dtdy);
                 if (hl != 0) {
                     gDPNoParam(D_800F36A4++, 0xE7);
                     gDPSetColor(D_800F36A4++, 0xFB, RGBA(f->env[0], f->env[1], f->env[2], f->env[3]));
