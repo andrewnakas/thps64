@@ -38,7 +38,7 @@ def shared_digest():
     h = hashlib.sha256()
     paths = sorted(p for d in SHARED for p in glob.glob(os.path.join(ROOT, d, '**', '*'), recursive=True)
                    if os.path.isfile(p) and '__pycache__' not in p)
-    for p in paths + [match.CC1, f'{match.TOOLS}/mips-as.exe', match.MAIN]:
+    for p in paths + [match.CC1, match.CC1PLUS, f'{match.TOOLS}/mips-as.exe', match.MAIN]:
         if os.path.isfile(p):
             h.update(os.path.relpath(p, ROOT).encode() + open(p, 'rb').read().replace(b'\r\n', b'\n'))
     return h.hexdigest()
