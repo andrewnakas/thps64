@@ -25,6 +25,11 @@ here reads it locally and never uploads anything.
 | **Decompiled** in total: matching + non-matching C (`src/nonmatching/`) | **2,511 / 2,512** | **99.78%** |
 | Kept as assembly: libgcc `__udivdi3` (not game code; see [docs/ASM_UNITS.md](docs/ASM_UNITS.md)) | 1 | 0.22% |
 
+On ByteMatch / objdiff terms: **fuzzy match 97.5%** (matched code at 100%, each non-matching function at its
+instruction similarity to the game), and **85 of 115 units linked** (40.5% of code). A unit counts as linked only
+when every function in it is byte-matching C inside the byte-identical build. Units holding a non-matching
+function still link that function's original assembly, so the project is not 100% linked yet.
+
 - **Non-matching functions.** The last 62 functions resisted a byte-for-byte match. Each one has readable,
   behaviour-equivalent C in `src/nonmatching/`, checked block by block against the original assembly. Each file
   starts with a `NON_MATCHING:` note that names what still differs. Usually that is a register-allocation or

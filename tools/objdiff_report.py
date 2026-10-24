@@ -10,9 +10,12 @@ facts from two ROM-free inputs:
   * a functions table:  addr,size,name[,...]   (header row optional; hex or decimal)
   * the set of matched function names          (a directory of <name>.c files and/or a list)
 
-Every matched function counts as a 100% match, every other one as 0%. Data is not
-tracked (total_data = 0). No unit is marked complete ("linked"), because the binary is
-not rebuilt from source alone.
+Every matched function counts as a 100% match, every other one as 0%, unless `--fuzzy`
+gives it a score (name,percent CSV: e.g. the instruction similarity of a non-matching C
+version, written by tools/nonmatching.py --scores). Data is not tracked (total_data = 0).
+With `--complete-when-matched` a unit whose functions are all matched is marked complete
+("linked"): use it only when a build gate proves the linked binary byte-identical with
+those units compiled from source (tools/build.py does).
 
 Units: by default the whole table is one unit (`--unit main`). `--split-at-pads config/symbol_addrs.txt` splits it
 at the `pad_` filler units (each marks where an original object file was padded to 16 bytes, so the units
@@ -82,13 +85,20 @@ def pct(part, total):
     return 100.0 * part / total if total else 0.0
 
 
-def measures(funcs, matched, units=1):
-    """objdiff Measures. 64-bit counts are strings, as protobuf JSON (pbjson) writes them."""
+def fuzzy_of(name, matched, fuzzy):
+    return 100.0 if name in matched else fuzzy.get(name, 0.0)
+
+
+def measures(funcs, matched, fuzzy, units=1, complete=None, complete_units=0):
+    """objdiff Measures. 64-bit counts are strings, as protobuf JSON (pbjson) writes them. `complete`: names of the
+    functions in complete (linked) units."""
     total = sum(s for _, s, _ in funcs)
     done = sum(s for _, s, n in funcs if n in matched)
+    fz = sum(s * fuzzy_of(n, matched, fuzzy) for _, s, n in funcs) / 100.0
+    linked = sum(s for _, s, n in funcs if complete and n in complete)
     nf, mf = len(funcs), sum(1 for f in funcs if f[2] in matched)
     return {
-        'fuzzy_match_percent': pct(done, total),
+        'fuzzy_match_percent': pct(fz, total),
         'total_code': str(total),
         'matched_code': str(done),
         'matched_code_percent': pct(done, total),
@@ -98,19 +108,20 @@ def measures(funcs, matched, units=1):
         'total_functions': nf,
         'matched_functions': mf,
         'matched_functions_percent': pct(mf, nf),
-        'complete_code': '0',
-        'complete_code_percent': 0.0,
+        'complete_code': str(linked),
+        'complete_code_percent': pct(linked, total),
         'complete_data': '0',
         'complete_data_percent': 0.0,
         'total_units': units,
-        'complete_units': 0,
+        'complete_units': complete_units,
     }
 
 
-def make_unit(name, funcs, matched, section, categories, source_path):
+def make_unit(name, funcs, matched, fuzzy, complete_when_matched, section, categories, source_path):
     base = funcs[0][0]
-    m = measures(funcs, matched)
-    meta = {'complete': False, 'progress_categories': categories}
+    complete = complete_when_matched and all(n in matched for _, _, n in funcs)
+    m = measures(funcs, matched, fuzzy, 1, {n for _, _, n in funcs} if complete else None, int(complete))
+    meta = {'complete': complete, 'progress_categories': categories}
     if source_path:
         meta['source_path'] = source_path
     return {
@@ -125,7 +136,7 @@ def make_unit(name, funcs, matched, section, categories, source_path):
         'functions': [{
             'name': n,
             'size': str(s),
-            'fuzzy_match_percent': 100.0 if n in matched else 0.0,
+            'fuzzy_match_percent': fuzzy_of(n, matched, fuzzy),
             'metadata': {'virtual_address': str(a)},
             'address': str(a - base),
         } for a, s, n in funcs],
@@ -179,7 +190,8 @@ def read_pads(path):
 
 
 def build(funcs, matched, unit='main', section='.text', group_bytes=0, category=None, source_path=None,
-          bounds=None):
+          bounds=None, fuzzy=None, complete_when_matched=False):
+    fuzzy = fuzzy or {}
     cats = []
     cat_ids = []
     if category:
@@ -189,11 +201,14 @@ def build(funcs, matched, unit='main', section='.text', group_bytes=0, category=
     chunks = split_at(funcs, bounds) if bounds else group(funcs, group_bytes)
     for chunk in chunks:
         name = unit if len(chunks) == 1 else f'{unit}/{chunk[0][0]:08X}-{chunk[-1][0] + chunk[-1][1]:08X}'
-        units.append(make_unit(name, chunk, matched, section, cat_ids, source_path))
+        units.append(make_unit(name, chunk, matched, fuzzy, complete_when_matched, section, cat_ids, source_path))
+    done = [u for u in units if u['metadata']['complete']]
+    linked = {f['name'] for u in done for f in u['functions']}
+    top = measures(funcs, matched, fuzzy, len(units), linked, len(done))
     if category:
-        cats = [{'id': cat_ids[0], 'name': cname or cat_ids[0], 'measures': measures(funcs, matched, len(units))}]
+        cats = [{'id': cat_ids[0], 'name': cname or cat_ids[0], 'measures': top}]
     return {
-        'measures': measures(funcs, matched, len(units)),
+        'measures': top,
         'units': units,
         'version': REPORT_VERSION,
         'categories': cats,
@@ -216,6 +231,10 @@ def main():
                          'original object files: each pad is where a file was padded to 16 bytes)')
     ap.add_argument('--category', help='progress category ID[:NAME] holding every unit')
     ap.add_argument('--source-path', help='source_path metadata for the unit(s), e.g. src/funcs')
+    ap.add_argument('--fuzzy', help='CSV name,percent: fuzzy match of functions that are not matched')
+    ap.add_argument('--complete-when-matched', action='store_true',
+                    help='mark units whose functions are all matched as complete (linked); only when a build gate '
+                         'proves the linked binary byte-identical')
     ap.add_argument('--compact', action='store_true', help='no indentation')
     a = ap.parse_args()
     if not a.matched_dir and not a.matched_list:
@@ -226,7 +245,14 @@ def main():
     unknown = sorted(matched - {n for _, _, n in funcs})
     matched -= set(unknown)
     bounds = read_pads(a.split_at_pads) if a.split_at_pads else None
-    report = build(funcs, matched, a.unit, a.section, a.group_bytes, a.category, a.source_path, bounds)
+    fuzzy = {}
+    if a.fuzzy:
+        with open(a.fuzzy, newline='') as f:
+            for r in csv.reader(f):
+                if r and not r[0].startswith('#') and r[0] != 'name':
+                    fuzzy[r[0].strip()] = max(0.0, min(100.0, float(r[1])))
+    report = build(funcs, matched, a.unit, a.section, a.group_bytes, a.category, a.source_path, bounds,
+                   fuzzy, a.complete_when_matched)
 
     out = a.output or os.path.join('build', a.version, 'report.json')
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
@@ -236,7 +262,8 @@ def main():
     m = report['measures']
     print(f"{out}: {m['matched_functions']}/{m['total_functions']} functions, "
           f"{m['matched_code']}/{m['total_code']} bytes ({m['matched_code_percent']:.3f}%), "
-          f"{len(report['units'])} unit(s)"
+          f"{len(report['units'])} unit(s), fuzzy {m['fuzzy_match_percent']:.3f}%, "
+          f"{m['complete_units']} complete unit(s) ({m['complete_code_percent']:.3f}% linked)"
           + (f"; ignored {len(unknown)} matched name(s) not in the table, e.g. {unknown[0]}" if unknown else ''))
 
 
