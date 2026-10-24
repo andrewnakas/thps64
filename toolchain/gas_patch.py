@@ -5,6 +5,10 @@
   THPS_AS_NO_MUL_SWAP    never move mult/multu/dmult/dmultu/mul.s/mul.d into a delay slot (VR4300 errata)
   THPS_AS_COP_INTERLOCKS no coprocessor load/move hazard nops (VR4300 interlocks); keep the one nop between an FP
                          compare and the branch reading it, also when flushing delays at `.set noreorder`
+  THPS_AS_NO_HILO_FLUSH  (only matters with -no-m4100) no HI/LO hazard nops when gas flushes delays at a `.set
+                         noreorder` directive (GCC's own branch + delay slot; macros like div still get them): the game never has `mflo/mfhi; nop; branch`
+                         (0 of 168 mflo/mfhi followed by a branch within two words), while -no-m4100 files do
+                         have `mflo; nop; nop; mult` (67)
   THPS_AS_MULMUL_CODE_ONLY  (gas/input-file.c, the KMC "mulmul" fix) a line starting in column 0 (a label, or the
                          blank line GCC prints after `.set reorder`) does not count as a float multiply, so a
                          mult/mul.s right after a branch target gets no nop: the game has 36 multiplies at branch
@@ -38,6 +42,7 @@ if len(sys.argv) > 2:
 p = sys.argv[1]
 s = open(p, newline='').read()
 COP = '(getenv ("THPS_AS_COP_INTERLOCKS") == NULL)'
+HILO = '(! thps_set_noreorder || getenv ("THPS_AS_NO_HILO_FLUSH") == NULL)'
 edits = [
     # delay-slot swap: loads never swapped
     ('\t      || (mips_isa < 2\n\t\t  && (prev_pinfo\n\t\t      & (INSN_LOAD_MEMORY_DELAY\n',
@@ -69,6 +74,18 @@ edits = [
     # mips_emit_delays: one nop (not two) after an FP compare
     ('\t  if ((mips_isa < 4\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n',
      f'\t  if ((mips_isa < 4 && {COP}\n\t       && (prev_insn.insn_mo->pinfo & INSN_WRITE_COND_CODE))\n'),
+    # mips_emit_delays: no HI/LO hazard nops at `.set noreorder` (macros such as div still flush them)
+    ('   kept for the previous instructions.  */\n\nstatic void\nmips_emit_delays ()\n',
+     '   kept for the previous instructions.  */\n\nstatic int thps_set_noreorder;\n\nstatic void\nmips_emit_delays ()\n'),
+    ('  else if (strcmp (name, "noreorder") == 0)\n    {\n      mips_emit_delays ();\n',
+     '  else if (strcmp (name, "noreorder") == 0)\n    {\n      thps_set_noreorder = 1;\n      mips_emit_delays ();\n'
+     '      thps_set_noreorder = 0;\n'),
+    ('(! interlocks\n\t      && (prev_insn.insn_mo->pinfo\n\t\t  & (INSN_READ_LO',
+     f'(! interlocks && {HILO}\n\t      && (prev_insn.insn_mo->pinfo\n\t\t  & (INSN_READ_LO'),
+    ('(! interlocks\n\t\t  && ((prev_insn.insn_mo->pinfo & INSN_READ_HI)',
+     f'(! interlocks && {HILO}\n\t\t  && ((prev_insn.insn_mo->pinfo & INSN_READ_HI)'),
+    ('(! interlocks\n\t\t   && ((prev_prev_insn.insn_mo->pinfo & INSN_READ_HI)',
+     f'(! interlocks && {HILO}\n\t\t   && ((prev_prev_insn.insn_mo->pinfo & INSN_READ_HI)'),
 ]
 for old, new in edits:
     if new in s:

@@ -52,6 +52,9 @@ os.environ['THPS_AS_NO_MUL_SWAP'] = '1'
 # line as a float multiply: a label or the blank line after `.set reorder`, so a multiply at a branch target got a
 # nop. The game has 36 multiplies at branch targets, 35 without one (2026-10-23)
 os.environ['THPS_AS_MULMUL_CODE_ONLY'] = '1'
+# with -no-m4100 (files whose mflo/mfhi -> mult/div hazards have nops), gas also padded mflo/mfhi before GCC's own
+# `.set noreorder` branch + delay slot; the game never has a nop between mflo/mfhi and a branch (0 of 168)
+os.environ['THPS_AS_NO_HILO_FLUSH'] = '1'
 R_MIPS_26, R_MIPS_HI16, R_MIPS_LO16 = 4, 5, 6
 
 
@@ -201,7 +204,7 @@ def _check_gas():
     exe = f'{TOOLS}/mips-as.exe'
     data = open(exe, 'rb').read() if os.path.exists(exe) else b''
     if data and not all(k in data for k in (b'THPS_AS_NO_LOAD_SWAP', b'THPS_AS_COP_INTERLOCKS', b'THPS_AS_NO_STORE_SWAP', b'THPS_AS_NO_MUL_SWAP',
-                                                    b'THPS_AS_MULMUL_CODE_ONLY')):
+                                                    b'THPS_AS_MULMUL_CODE_ONLY', b'THPS_AS_NO_HILO_FLUSH')):
         raise CompileError(f'{exe} predates the THPS gas patches: rerun toolchain/build.sh')
 
 
