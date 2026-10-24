@@ -11,5 +11,5 @@ for a in "$@"; do
 done
 extra=""
 if [ $compile = 1 ] && [ -z "$out" ] && [ -n "$src" ]; then b=$(basename "$src" .c); extra="-o $b.o"; fi
-"$Z" cc -target x86-windows-gnu -I/e/thps64-tools/compat -std=gnu89 -w -Wno-error -Wno-implicit-function-declaration -Wno-int-conversion -Wno-return-type -Wno-incompatible-pointer-types -fno-sanitize=undefined "$@" $extra || exit $?
+"$Z" cc -target x86-windows-gnu -I/e/thps64-tools/compat -std=gnu89 -fwrapv -fno-strict-aliasing -w -Wno-error -Wno-implicit-function-declaration -Wno-int-conversion -Wno-return-type -Wno-incompatible-pointer-types -fno-sanitize=undefined "$@" $extra || exit $?
 case "$out" in *.*|"") ;; *) [ -f "$out" ] && cp -f "$out" "$out.exe";; esac
