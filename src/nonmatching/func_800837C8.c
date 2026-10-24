@@ -1,6 +1,6 @@
 /* compiler: cc1plus */
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 -ffast-math */
-/* NON_MATCHING: 301/679 positional instructions agree (target683); iterator addressing, branch lowering and register allocation differ. */
+/* NON_MATCHING: ratio 0.875 (aln), 301/679 positional instructions agree (target683); iterator addressing, branch lowering of the triangle-flag test and register allocation differ. Review fix: the second (cmd 6) triangle also records its hit after func_80061D7C when unk88 is set, as the game does. */
 #include "common.h"
 
 struct Mtx_837C8;
@@ -291,27 +291,27 @@ extern "C" s32 func_800837C8(Obj_837C8 *obj, Ent_837C8 *ent, Mtx_837C8 *mtx) {
                             s32 c = (w1 >> 1) & 0x7F;
 
                             if (func_800833A8(&p0, &p1, &verts[a], &verts[b], &verts[c], &t, &nrm)) {
+                                /* unlike the first triangle, the game records this hit even when unk88 is
+                                   set (after func_80061D7C it jumps to the hit store at 800841AC) */
                                 if (obj->unk88) {
                                     func_80061D7C(ent->info->unk1C, 1);
-                                } else {
-                                    if (mtx != NULL) {
-                                        Mtx_837C8 m(*mtx);
+                                } else if (mtx != NULL) {
+                                    Mtx_837C8 m(*mtx);
 
-                                        m.trans() = Vec3_837C8(0.0f);
-                                        Vec3_837C8 v(nrm);
+                                    m.trans() = Vec3_837C8(0.0f);
+                                    Vec3_837C8 v(nrm);
 
-                nrm = v * m;
-                                        f32 len = __builtin_sqrtf(nrm.x * nrm.x + nrm.y * nrm.y + nrm.z * nrm.z);
-                                        if (len != 0.0f) {
-                                            f32 inv = 1.0f / len;
+                                    nrm = v * m;
+                                    f32 len = __builtin_sqrtf(nrm.x * nrm.x + nrm.y * nrm.y + nrm.z * nrm.z);
+                                    if (len != 0.0f) {
+                                        f32 inv = 1.0f / len;
 
-                                            nrm.x *= inv;
-                                            nrm.y *= inv;
-                                            nrm.z *= inv;
-                                        }
+                                        nrm.x *= inv;
+                                        nrm.y *= inv;
+                                        nrm.z *= inv;
                                     }
-                                    hit837C8((TriFlag_837C8 *)(ta.data + tri * 4), t, nrm, ent, D_800FC0C0);
                                 }
+                                hit837C8((TriFlag_837C8 *)(ta.data + tri * 4), t, nrm, ent, D_800FC0C0);
                             }
                         }
                         tri++;

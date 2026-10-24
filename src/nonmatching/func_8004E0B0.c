@@ -1,5 +1,5 @@
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: 11/684 positional instructions agree (target723); typed rewrite preserves the state machine, but register allocation, redundant sign guards and control-flow layout differ. */
+/* NON_MATCHING: 11/684 positional instructions agree (target 723), difflib ratio 0.78; reviewed equivalent block by block. Differs only in register allocation (game keeps a zero in $s4 for the stack args, copies vectors through $t0-$t2), scheduling/branch layout (bnel/beql vs bnez+nop, case-order of the 0x308 switch), and two dead sign guards on 0x9E0 that the game emits (v<0 && v>0, v>0 && v>>31) and that never store, so they are omitted here. */
 #include "common.h"
 #include "layout.h"
 

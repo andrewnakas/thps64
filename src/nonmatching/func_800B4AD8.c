@@ -1,6 +1,6 @@
 /* compiler: cc1plus */
 /* cflags: -O2 */
-/* NON_MATCHING: 446/462 instructions agree; matrix-pointer setup, indexed add operands and display-list scheduling differ. */
+/* NON_MATCHING: ratio 0.944 (aln), 446/462 instructions agree; matrix-pointer setup, indexed add operands and display-list scheduling differ; the game also calls sqrtf after a NaN sqrt.s result (errno fallback), which this C++ build of __builtin_sqrtf leaves out (same value). */
 #include "common.h"
 
 typedef struct {

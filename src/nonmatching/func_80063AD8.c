@@ -1,6 +1,6 @@
 /* compiler: cc1plus */
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: 331/524 positional instructions agree (target525); weighted-product register classes and constructor temporary scheduling differ. */
+/* NON_MATCHING: ratio 0.942 (aln), 331/524 positional instructions agree (target525); weighted-product register classes, constructor temporary scheduling and a bne/bnel delay-slot choice differ. */
 #include "common.h"
 
 typedef struct {

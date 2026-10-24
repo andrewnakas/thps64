@@ -1,5 +1,5 @@
 /* cflags: -O2 -fno-schedule-insns */
-/* NON_MATCHING: 116/124 instructions agree; argument-register copy and y-update scheduling differ. */
+/* NON_MATCHING: ratio 0.952 (aln), 116/124 instructions agree; argument-register copy, y-update scheduling and the loop-back branch sense (beqz+j vs the game's bnel+j, same targets) differ. */
 #include "common.h"
 
 typedef struct {

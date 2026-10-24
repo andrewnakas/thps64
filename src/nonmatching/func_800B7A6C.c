@@ -1,5 +1,5 @@
 /* cflags: -O2 */
-/* NON_MATCHING: 19/442 positional instructions agree (target439); floating-point live ranges, input-load reuse and clipping register allocation differ. */
+/* NON_MATCHING: 19/442 positional instructions agree (target 439), difflib ratio 0.673; reviewed equivalent block by block. Only register allocation differs (ours uses f26/f28 for the min/max pairs) plus where loads are placed and reused (ours loads p0/box fields early). Control flow, constants, comparisons and stores are the same. */
 #include "common.h"
 
 typedef struct {

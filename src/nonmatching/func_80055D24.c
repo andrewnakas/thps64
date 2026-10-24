@@ -1,6 +1,6 @@
 /* compiler: cc1plus */
 /* cflags: -Wa,-no-m4100 -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: C++ frame differs from the game; unused frame-padding arrays removed. Best original draft872/892, cleaned draft648/892 instructions agree. */
+/* NON_MATCHING: ratio 0.993 (aln); only the C++ frame (stack-slot offsets) differs from the game; unused frame-padding arrays removed. Best original draft872/892, cleaned draft648/892 instructions agree. */
 #include "common.h"
 
 typedef struct {

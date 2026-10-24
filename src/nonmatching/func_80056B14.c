@@ -1,5 +1,5 @@
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 -Wa,-O0 */
-/* NON_MATCHING: 839/1250 positional instructions agree (target1254); speed/statistic temporary registers and clamp scheduling differ. */
+/* NON_MATCHING: ratio 0.952 (aln), 839/1250 positional instructions agree (target1254); speed/statistic temporary registers, operand order and clamp scheduling differ (the game tail-duplicates one stat sum with a j). */
 #include "common.h"
 
 typedef struct {

@@ -1,5 +1,5 @@
 /* cflags: -O2 */
-/* NON_MATCHING: 8/578 positional instructions agree (target588); frame, floating-point allocation, argument spills and texture-rectangle scheduling differ. */
+/* NON_MATCHING: aln ratio 0.717 (581 vs 588 insns); frame layout, float register allocation, argument spills and texture-rectangle scheduling differ. Reviewed for equivalence 2026-10-24: yl/yoff are s16 so the t-clamp test is (s16)yl + (s16)yoff < 0 as in the game. */
 #include "common.h"
 
 typedef struct {
@@ -112,7 +112,7 @@ f32 func_800A7B50(FontA7B50 *f, f32 x, f32 y, u8 *str, s32 measure, u8 *colors, 
     u16 yh0;
     u16 yh;
     u16 xh;
-    s32 yl;
+    s16 yl;
     s32 xl;
     s32 c;
     s32 idx;
@@ -123,7 +123,7 @@ f32 func_800A7B50(FontA7B50 *f, f32 x, f32 y, u8 *str, s32 measure, u8 *colors, 
     s16 dsdx;
     s16 dtdy;
     s32 xoff;
-    u16 yoff;
+    s16 yoff;
     f32 k;
     f32 z;
     f32 four;

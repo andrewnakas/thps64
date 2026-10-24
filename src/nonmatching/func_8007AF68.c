@@ -1,5 +1,5 @@
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: 135/503 positional instructions agree (target499); scratchpad-load forms, saved registers and primitive scheduling differ. Unused frame-padding array removed. */
+/* NON_MATCHING: 135/503 positional instructions agree (target 499), structural ratio 0.48 (difflib); reviewed for equivalence 2026-10-24: every path, constant, access width and primitive field checked against the asm. Differences are register allocation (game keeps o in $t9, uses $fp/$s4-$s7 for the D_800D0FA8/D_800DE5E0/tag constants), scratchpad-address forms (game uses lui/%lo absolute 0x1F80xxxx loads and parallel pointer IVs), lh vs lhu+sll/sra loads, and scheduling of the primitive stores. Unused frame-padding array removed. */
 #include "common.h"
 
 typedef struct {

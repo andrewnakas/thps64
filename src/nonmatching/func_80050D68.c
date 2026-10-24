@@ -1,5 +1,5 @@
 /* cflags: -Wa,-no-m4100 -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: 376/1426 positional instructions agree (target1422); temporary/spill frame layout, wave divisions and switch-tail scheduling differ. */
+/* NON_MATCHING: ratio 0.940 (aln), 376/1426 positional instructions agree (target1422); temporary/spill frame layout, wave divisions, register choice and switch-tail scheduling differ (the |0x9DC| > 4000 test is lowered with a duplicated compare). Switch case mapping checked against jtbl_8001B9C8/jtbl_8001BAA0. */
 #include "common.h"
 
 typedef struct {
