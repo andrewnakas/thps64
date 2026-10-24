@@ -2,6 +2,22 @@
 
 Pilot game for Decompathon Steward (E:/decompathon-steward). Private, local only. No ROM or derived data in git.
 
+
+## Final state (2026-10-24)
+- **2449 / 2512 functions byte-matched (86.85% of code bytes)** in `src/funcs`; the default build is byte-identical.
+- **2511 / 2512 decompiled (99.78%)**: the 62 functions that resist matching have reviewed, behaviour-equivalent C
+  in `src/nonmatching` (RULES.md rule 9; `python tools/nonmatching.py`). Each was checked block by block against
+  the asm; reviews caught and fixed real bugs (e.g. #258, #264, #270).
+- The one function without C is libgcc `__udivdi3` (func_800C0770): byte-identical to GCC 2.8.1 `libgcc2.c`
+  (`-O2 -Wa,-no-m4100`), kept as asm because that source is GPL (docs/ASM_UNITS.md).
+- **Playable decompiled build:** `python tools/build.py --nonmatching` + `python tools/pack_rom.py build/rom/X.z64`
+  builds a ROM with all 62 non-matching functions running from C. In headless mupen64plus (`tools/emu_shots.sh`,
+  4 MB, no input) its screenshots through boot, title and attract demo (10-90 s) are identical to the original.
+  `tools/nm_bisect.py` boots one ROM per function to find a misbehaving one. Gameplay with input is not covered.
+- Why the rest don't match: register-allocation / scheduling / reorg ties in GCC 2.8.1, switch compare trees our
+  compiler (and the KMC-matching 2.7.2) builds differently, a libc assembled by another toolchain, and PSX GTE
+  leftovers; each file's `NON_MATCHING:` note names the cause.
+
 ## ROM
 - `E:\Tony Hawk's Pro Skater (U) (V1.1) [!].z64`, 12 MiB, sha1 4900b6c92fb8df1765e91e891dccc525bb102fe1
 - Header: NTFE "TONY HAWK PRO SKATER", entry 0x80000400, libultra rev 0x1444
