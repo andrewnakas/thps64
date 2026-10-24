@@ -1,5 +1,5 @@
 /* cflags: -O2 -fno-schedule-insns -fno-schedule-insns2 */
-/* NON_MATCHING: 248/396 positional instructions; target 394. Display-list
+/* NON_MATCHING: 254/396 positional instructions; target 394. Display-list
  * cursor CSE/registers, float compare setup and integer conversion registers
  * still differ after focused attempts. Claude A3 draft, audited by Codex.
  * 26E48..26E98: conditional early return; 26E98..26FE4: vector/matrix calls.
@@ -53,7 +53,6 @@ void func_80026E24(u8 *arg0, u8 *arg1, s32 arg2) {
     f32 t;
     f32 k;
     u32 *w;
-    u32 hb;
     u32 c;
     f32 (*mp)[4];
     f32 sc;
@@ -102,7 +101,7 @@ void func_80026E24(u8 *arg0, u8 *arg1, s32 arg2) {
     mp = m1;
     func_8009C8EC(m2, mp);
     s.x = sc;
-    *(s32 *)&s.y = 0;
+    s.y = 0.0f;
     s.z = sc;
     func_8009D8B4(mp, &s);
     {
@@ -133,16 +132,7 @@ void func_80026E24(u8 *arg0, u8 *arg1, s32 arg2) {
 
         _g->w0 = 0xFA000000;
         w = &_g->w1;
-        if (al >= 2147483648.0f) {
-            goto big;
-        }
-        c = (s32)al;
-        goto end;
-    big:
-        al = al - 2147483648.0f;
-        hb = 0x80000000;
-        c = (s32)al | hb;
-    end:
+        c = (u32)al;
         *w = c & 0xFF;
     }
     GFX(0xFCFFFFFF, 0xFFFDF638);
