@@ -1,0 +1,7 @@
+// Linker-only aliases: names that compiled C calls for code that splat already names func_XXXXXXXX in main.
+// Read only by tools/build.py (never by find_funcs/splat, so the split is unchanged). One `name = 0xADDR;` per line.
+// GCC's 64-bit runtime (libgcc) as linked into main, found by pairing func_800BCDEC's jal targets with the
+// compiler's relocations for the same C, in order:
+__udivdi3 = 0x800C0770;
+__cmpdi2 = 0x800C0D00;
+__floatdisf = 0x800C0D50;
