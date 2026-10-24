@@ -4,7 +4,7 @@
  * unused stack-rectangle stores differ. Claude B3 draft, audited by Codex.
  * 6E0FC..6E164: slot search/duplicate return; 6E164..6E268: palette/array
  * allocation; 6E268..6E43C: sprite records; 6E43C..6E560: defaults/cleanup.
- * Slot and sprite strides are 24; image stride 10. Palette and CLUT accesses
+ * Slot and sprite strides are 0x24; image stride is 0x10. Palette and CLUT accesses
  * are u16, UV/slot+18 are u8; dimensions, offsets and final division are s32.
  * Unused local rectangle stores at 6E20C..6E224 and 6E2C8..6E2DC have no
  * escaped address; omitted to avoid reading the uninitialized saved registers.

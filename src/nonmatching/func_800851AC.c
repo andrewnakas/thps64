@@ -2,7 +2,7 @@
  * comparison pairs 251/384 equally. Mode reload/address setup, saved-register
  * selection, scalar spills and constant loads differ. Claude K19 draft;
  * Codex audited 851E4..85774, including both bar paths and every call.
- * Sprites start at 114/128/13C/150, stride 14. All counters/coordinates are
+ * Sprites start at 0x114/0x128/0x13C/0x150, stride 0x14. All counters/coordinates are
  * signed words, config mode/color channels are unsigned bytes, tick is u32.
  * Reload the tick after sprite calls; normal width uses signed *72/3000.
  */
