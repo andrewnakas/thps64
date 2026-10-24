@@ -39,6 +39,7 @@ jobs:
           --matched-dir src/funcs --matched-glob 'func_*.c'
           --version "$VERSION"
           --source-path src/funcs
+          --split-at-pads config/symbol_addrs.txt
           -o "build/$VERSION/report.json"
 
       - name: Upload report artifact

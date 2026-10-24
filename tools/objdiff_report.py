@@ -14,7 +14,9 @@ Every matched function counts as a 100% match, every other one as 0%. Data is no
 tracked (total_data = 0). No unit is marked complete ("linked"), because the binary is
 not rebuilt from source alone.
 
-Units: by default the whole table is one unit (`--unit main`). `--group-bytes N` splits
+Units: by default the whole table is one unit (`--unit main`). `--split-at-pads config/symbol_addrs.txt` splits it
+at the `pad_` filler units (each marks where an original object file was padded to 16 bytes, so the units
+approximate the game's source files; files that ended aligned leave no pad and share a unit). `--group-bytes N` splits
 it into address-range units of about N bytes each (a map for the trackers; these are
 address ranges, not real translation units). `--category ID[:NAME]` adds a progress
 category holding every unit.
@@ -147,14 +149,44 @@ def group(funcs, nbytes):
     return out
 
 
-def build(funcs, matched, unit='main', section='.text', group_bytes=0, category=None, source_path=None):
+def split_at(funcs, bounds):
+    """Units that end at each boundary address (a `pad_` filler unit: where an original object file was padded to
+    16 bytes). A boundary closes the unit holding the functions below it."""
+    bounds = sorted(bounds)
+    out, cur, k = [], [], 0
+    for f in funcs:
+        while k < len(bounds) and f[0] >= bounds[k]:
+            if cur:
+                out.append(cur)
+                cur = []
+            k += 1
+        cur.append(f)
+    if cur:
+        out.append(cur)
+    return out
+
+
+def read_pads(path):
+    """Addresses of the asm-only `pad_XXXXXXXX` units in a symbol_addrs.txt (tools/find_funcs.py writes them)."""
+    import re
+    out = []
+    with open(path) as fh:
+        for line in fh:
+            m = re.match(r'\s*pad_[0-9A-Fa-f]+\s*=\s*(0x[0-9A-Fa-f]+)', line)
+            if m:
+                out.append(int(m.group(1), 16))
+    return out
+
+
+def build(funcs, matched, unit='main', section='.text', group_bytes=0, category=None, source_path=None,
+          bounds=None):
     cats = []
     cat_ids = []
     if category:
         cid, _, cname = category.partition(':')
         cat_ids = [cid]
     units = []
-    chunks = group(funcs, group_bytes)
+    chunks = split_at(funcs, bounds) if bounds else group(funcs, group_bytes)
     for chunk in chunks:
         name = unit if len(chunks) == 1 else f'{unit}/{chunk[0][0]:08X}-{chunk[-1][0] + chunk[-1][1]:08X}'
         units.append(make_unit(name, chunk, matched, section, cat_ids, source_path))
@@ -179,6 +211,9 @@ def main():
     ap.add_argument('--unit', default='main', help='unit name, or name prefix with --group-bytes (default main)')
     ap.add_argument('--section', default='.text', help='section name for the code (default .text)')
     ap.add_argument('--group-bytes', type=parse_int, default=0, help='split into address-range units of ~N bytes')
+    ap.add_argument('--split-at-pads', metavar='SYMBOL_ADDRS',
+                    help='split into units at the pad_ filler units listed in this symbol_addrs.txt (approximate '
+                         'original object files: each pad is where a file was padded to 16 bytes)')
     ap.add_argument('--category', help='progress category ID[:NAME] holding every unit')
     ap.add_argument('--source-path', help='source_path metadata for the unit(s), e.g. src/funcs')
     ap.add_argument('--compact', action='store_true', help='no indentation')
@@ -190,7 +225,8 @@ def main():
     matched = read_matched(a.matched_dir, a.matched_glob, a.matched_list)
     unknown = sorted(matched - {n for _, _, n in funcs})
     matched -= set(unknown)
-    report = build(funcs, matched, a.unit, a.section, a.group_bytes, a.category, a.source_path)
+    bounds = read_pads(a.split_at_pads) if a.split_at_pads else None
+    report = build(funcs, matched, a.unit, a.section, a.group_bytes, a.category, a.source_path, bounds)
 
     out = a.output or os.path.join('build', a.version, 'report.json')
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
